@@ -153,20 +153,6 @@ this.checkCert =
       SSLStatus.QueryInterface(Ci.nsISSLStatus).serverCert;
 
   validateCert(cert, aCerts);
-
-  if (aAllowNonBuiltInCerts === true)
-    return;
-
-  var issuerCert = cert;
-  while (issuerCert.issuer && !issuerCert.issuer.equals(issuerCert))
-    issuerCert = issuerCert.issuer;
-
-  const certNotBuiltInErr = "Certificate issuer is not built-in.";
-  if (!issuerCert)
-    throw new Ce(certNotBuiltInErr, Cr.NS_ERROR_ABORT);
-
-  if (!issuerCert.isBuiltInRoot)
-    throw new Ce(certNotBuiltInErr, Cr.NS_ERROR_ABORT);
 }
 
 /**
