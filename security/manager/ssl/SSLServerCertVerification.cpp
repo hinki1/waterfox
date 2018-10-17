@@ -267,7 +267,6 @@ class CertErrorRunnable : public SyncRunnableBase
   RefPtr<SSLServerCertVerificationResult> mResult; // out
 private:
   SSLServerCertVerificationResult* CheckCertOverrides();
-  nsresult OverrideAllowedForHost(/*out*/ bool& overrideAllowed);
 
   const void* const mFdForLogging; // may become an invalid pointer; do not dereference
   const nsCOMPtr<nsIX509Cert> mCert;
@@ -455,75 +454,6 @@ DetermineCertOverrideErrors(const UniqueCERTCertificate& cert,
   return SECSuccess;
 }
 
-// Helper function to determine if overrides are allowed for this host.
-// Overrides are not allowed for known HSTS or HPKP hosts. However, an IP
-// address is never considered an HSTS or HPKP host.
-nsresult
-CertErrorRunnable::OverrideAllowedForHost(/*out*/ bool& overrideAllowed)
-{
-  overrideAllowed = false;
-
-  // If this is an IP address, overrides are allowed, because an IP address is
-  // never an HSTS or HPKP host. nsISiteSecurityService takes this into account
-  // already, but the real problem here is that calling NS_NewURI with an IPv6
-  // address fails. We do this to avoid that. A more comprehensive fix would be
-  // to have Necko provide an nsIURI to PSM and to use that here (and
-  // everywhere). However, that would be a wide-spanning change.
-  const nsACString& hostname = mInfoObject->GetHostName();
-  if (net_IsValidIPv6Addr(hostname.BeginReading(), hostname.Length())) {
-    overrideAllowed = true;
-    return NS_OK;
-  }
-
-  // If this is an HTTP Strict Transport Security host or a pinned host and the
-  // certificate is bad, don't allow overrides (RFC 6797 section 12.1,
-  // HPKP draft spec section 2.6).
-  bool strictTransportSecurityEnabled = false;
-  bool hasPinningInformation = false;
-  nsCOMPtr<nsISiteSecurityService> sss(do_GetService(NS_SSSERVICE_CONTRACTID));
-  if (!sss) {
-    MOZ_LOG(gPIPNSSLog, LogLevel::Debug,
-            ("[%p][%p] couldn't get nsISiteSecurityService to check HSTS/HPKP",
-            mFdForLogging, this));
-    return NS_ERROR_FAILURE;
-  }
-  nsCOMPtr<nsIURI> uri;
-  nsresult rv = NS_NewURI(getter_AddRefs(uri),
-                          NS_LITERAL_CSTRING("https://") + hostname);
-  if (NS_FAILED(rv)) {
-    MOZ_LOG(gPIPNSSLog, LogLevel::Debug,
-            ("[%p][%p] Creating new URI failed", mFdForLogging, this));
-    return rv;
-  }
-  rv = sss->IsSecureURI(nsISiteSecurityService::HEADER_HSTS,
-                        uri,
-                        mProviderFlags,
-                        mInfoObject->GetOriginAttributes(),
-                        nullptr,
-                        nullptr,
-                        &strictTransportSecurityEnabled);
-  if (NS_FAILED(rv)) {
-    MOZ_LOG(gPIPNSSLog, LogLevel::Debug,
-            ("[%p][%p] checking for HSTS failed", mFdForLogging, this));
-    return rv;
-  }
-  rv = sss->IsSecureURI(nsISiteSecurityService::HEADER_HPKP,
-                        uri,
-                        mProviderFlags,
-                        mInfoObject->GetOriginAttributes(),
-                        nullptr,
-                        nullptr,
-                        &hasPinningInformation);
-  if (NS_FAILED(rv)) {
-    MOZ_LOG(gPIPNSSLog, LogLevel::Debug,
-            ("[%p][%p] checking for HPKP failed", mFdForLogging, this));
-    return rv;
-  }
-
-  overrideAllowed = true;
-  return NS_OK;
-}
-
 SSLServerCertVerificationResult*
 CertErrorRunnable::CheckCertOverrides()
 {
@@ -547,16 +477,7 @@ CertErrorRunnable::CheckCertOverrides()
 
   uint32_t remaining_display_errors = mCollectedErrors;
 
-  bool overrideAllowed;
-  if (NS_FAILED(OverrideAllowedForHost(overrideAllowed))) {
-    return new SSLServerCertVerificationResult(mInfoObject,
-                                               mDefaultErrorCodeToReport);
-  }
-
-  if (overrideAllowed) {
-    MOZ_LOG(gPIPNSSLog, LogLevel::Debug,
-           ("[%p][%p] no HSTS or HPKP - overrides allowed\n",
-            mFdForLogging, this));
+  {
     nsCOMPtr<nsICertOverrideService> overrideService =
       do_GetService(NS_CERTOVERRIDE_CONTRACTID);
     // it is fine to continue without the nsICertOverrideService
@@ -601,10 +522,6 @@ CertErrorRunnable::CheckCertOverrides()
              mFdForLogging, this));
       return new SSLServerCertVerificationResult(mInfoObject, 0);
     }
-  } else {
-    MOZ_LOG(gPIPNSSLog, LogLevel::Debug,
-           ("[%p][%p] HSTS or HPKP - no overrides allowed\n",
-            mFdForLogging, this));
   }
 
   MOZ_LOG(gPIPNSSLog, LogLevel::Debug,
