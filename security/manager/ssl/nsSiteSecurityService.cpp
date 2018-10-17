@@ -1604,7 +1604,6 @@ nsSiteSecurityService::IsSecureHost(uint32_t aType, const nsACString& aHost,
 
   nsAutoCString host(
     PublicKeyPinningService::CanonicalizeHostname(flatHost.get()));
-  }
 
   // First check the exact host.
   if (HostHasHSTSEntry(host, false, aFlags, aOriginAttributes, aResult,
