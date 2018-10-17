@@ -520,7 +520,7 @@ CertErrorRunnable::OverrideAllowedForHost(/*out*/ bool& overrideAllowed)
     return rv;
   }
 
-  overrideAllowed = !strictTransportSecurityEnabled && !hasPinningInformation;
+  overrideAllowed = true;
   return NS_OK;
 }
 
