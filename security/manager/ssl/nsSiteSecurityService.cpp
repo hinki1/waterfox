@@ -639,39 +639,6 @@ nsSiteSecurityService::SetHSTSState(uint32_t aType,
     return NS_ERROR_INVALID_ARG;
   }
 
-  int64_t expiretime = ExpireTimeFromMaxAge(maxage);
-  RefPtr<SiteHSTSState> siteState = new SiteHSTSState(
-    hostname, aOriginAttributes, expiretime, aHSTSState, includeSubdomains,
-    aSource);
-  nsAutoCString stateString;
-  siteState->ToString(stateString);
-  SSSLOG(("SSS: setting state for %s", hostname.get()));
-  bool isPrivate = flags & nsISocketProvider::NO_PERMANENT_STORAGE;
-  mozilla::DataStorageType storageType = isPrivate
-                                         ? mozilla::DataStorage_Private
-                                         : mozilla::DataStorage_Persistent;
-  nsAutoCString storageKey;
-  SetStorageKey(hostname, aType, aOriginAttributes, storageKey);
-  nsresult rv;
-  if (isPreload) {
-    SSSLOG(("SSS: storing entry for %s in dynamic preloads", hostname.get()));
-    rv = mPreloadStateStorage->Put(storageKey, stateString,
-                                   mozilla::DataStorage_Persistent);
-  } else {
-    SSSLOG(("SSS: storing HSTS site entry for %s", hostname.get()));
-    nsCString value = mSiteStateStorage->Get(storageKey, storageType);
-    RefPtr<SiteHSTSState> curSiteState =
-      new SiteHSTSState(hostname, aOriginAttributes, value);
-    if (curSiteState->mHSTSState != SecurityPropertyUnset &&
-        curSiteState->mHSTSSource != SourceUnknown) {
-      // don't override the source
-      siteState->mHSTSSource = curSiteState->mHSTSSource;
-      siteState->ToString(stateString);
-    }
-    rv = mSiteStateStorage->Put(storageKey, stateString, storageType);
-  }
-  NS_ENSURE_SUCCESS(rv, rv);
-
   return NS_OK;
 }
 
@@ -735,25 +702,10 @@ nsSiteSecurityService::RemoveStateInternal(
   if (GetPreloadStatus(aHost) ||
       dynamicState->mHSTSState != SecurityPropertyUnset) {
     SSSLOG(("SSS: storing knockout entry for %s", aHost.get()));
-    RefPtr<SiteHSTSState> siteState = new SiteHSTSState(
-      aHost, aOriginAttributes, 0, SecurityPropertyKnockout, false,
-      SourceUnknown);
-    nsAutoCString stateString;
-    siteState->ToString(stateString);
-    nsresult rv;
-    if (aIsPreload) {
-      rv = mPreloadStateStorage->Put(storageKey, stateString,
-                                     mozilla::DataStorage_Persistent);
-    } else {
-      rv = mSiteStateStorage->Put(storageKey, stateString, storageType);
-    }
-    NS_ENSURE_SUCCESS(rv, rv);
   } else {
     SSSLOG(("SSS: removing entry for %s", aHost.get()));
     if (aIsPreload) {
       mPreloadStateStorage->Remove(storageKey, mozilla::DataStorage_Persistent);
-    } else {
-      mSiteStateStorage->Remove(storageKey, storageType);
     }
   }
 
@@ -1467,26 +1419,6 @@ nsSiteSecurityService::HostHasHSTSEntry(
         return true;
       }
     }
-
-    if (expired) {
-      SSSLOG(("Entry %s is expired - checking for preload state", aHost.get()));
-      // If the entry is expired and is not in either the static or dynamic
-      // preload lists, we can remove it.
-      // First, check the dynamic preload list.
-      value = mPreloadStateStorage->Get(preloadKey,
-                                        mozilla::DataStorage_Persistent);
-      RefPtr<SiteHSTSState> dynamicState =
-        new SiteHSTSState(aHost, aOriginAttributes, value);
-      if (dynamicState->mHSTSState == SecurityPropertyUnset) {
-        SSSLOG(("No dynamic preload - checking for static preload"));
-        // Now check the static preload list.
-        if (!GetPreloadStatus(aHost)) {
-          SSSLOG(("No static preload - removing expired entry"));
-          mSiteStateStorage->Remove(storageKey, storageType);
-        }
-      }
-    }
-    return false;
   }
 
   // Next, look in the dynamic preload list.
@@ -1818,26 +1750,6 @@ nsSiteSecurityService::SetHPKPState(const char* aHost, SiteHPKPState& entry,
   if (aIsPreload && aOriginAttributes != OriginAttributes()) {
     return NS_ERROR_INVALID_ARG;
   }
-  SSSLOG(("Top of SetPKPState"));
-  nsAutoCString host(aHost);
-  nsAutoCString storageKey;
-  SetStorageKey(host, nsISiteSecurityService::HEADER_HPKP, aOriginAttributes,
-                storageKey);
-  bool isPrivate = aFlags & nsISocketProvider::NO_PERMANENT_STORAGE;
-  mozilla::DataStorageType storageType = isPrivate
-                                         ? mozilla::DataStorage_Private
-                                         : mozilla::DataStorage_Persistent;
-  nsAutoCString stateString;
-  entry.ToString(stateString);
-
-  nsresult rv;
-  if (aIsPreload) {
-    rv = mPreloadStateStorage->Put(storageKey, stateString,
-                                   mozilla::DataStorage_Persistent);
-  } else {
-    rv = mSiteStateStorage->Put(storageKey, stateString, storageType);
-  }
-  NS_ENSURE_SUCCESS(rv, rv);
   return NS_OK;
 }
 
