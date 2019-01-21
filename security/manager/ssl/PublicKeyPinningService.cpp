@@ -177,11 +177,10 @@ FindPinningInformation(const char* hostname, mozilla::pkix::Time time,
   if (!sssService) {
     return NS_ERROR_FAILURE;
   }
-  const TransportSecurityPreload* foundEntry = nullptr;
   const char* evalHost = hostname;
   const char* evalPart;
   // Notice how the (xx = strchr) prevents pins for unqualified domain names.
-  while (!foundEntry && (evalPart = strchr(evalHost, '.'))) {
+  while ((evalPart = strchr(evalHost, '.'))) {
     MOZ_LOG(gPublicKeyPinningLog, LogLevel::Debug,
            ("pkpin: Querying pinsets for host: '%s'\n", evalHost));
     // Attempt dynamic pins first
@@ -202,35 +201,10 @@ FindPinningInformation(const char* hostname, mozilla::pkix::Time time,
       return NS_OK;
     }
 
-    size_t foundEntryIndex;
-    if (BinarySearchIf(kPublicKeyPinningPreloadList, 0,
-                       ArrayLength(kPublicKeyPinningPreloadList),
-                       TransportSecurityPreloadBinarySearchComparator(evalHost),
-                       &foundEntryIndex)) {
-      foundEntry = &kPublicKeyPinningPreloadList[foundEntryIndex];
-      MOZ_LOG(gPublicKeyPinningLog, LogLevel::Debug,
-             ("pkpin: Found pinset for host: '%s'\n", evalHost));
-      if (evalHost != hostname) {
-        if (!foundEntry->mIncludeSubdomains) {
-          // Does not apply to this host, continue iterating
-          foundEntry = nullptr;
-        }
-      }
-    } else {
-      MOZ_LOG(gPublicKeyPinningLog, LogLevel::Debug,
-             ("pkpin: Didn't find pinset for host: '%s'\n", evalHost));
-    }
     // Add one for '.'
     evalHost = evalPart + 1;
   }
 
-  if (foundEntry && foundEntry->pinset) {
-    if (time > TimeFromEpochInSeconds(kPreloadPKPinsExpirationTime /
-                                      PR_USEC_PER_SEC)) {
-      return NS_OK;
-    }
-    staticFingerprints = foundEntry;
-  }
   return NS_OK;
 }
 

@@ -70,147 +70,6 @@ stringIsBase64EncodingOf256bitValue(const nsCString& encodedString) {
   return binaryValue.Length() == SHA256_LENGTH;
 }
 
-class SSSTokenizer final : public Tokenizer
-{
-public:
-  explicit SSSTokenizer(const nsACString& source)
-    : Tokenizer(source)
-  {
-  }
-
-  MOZ_MUST_USE bool
-  ReadBool(/*out*/ bool& value)
-  {
-    uint8_t rawValue;
-    if (!ReadInteger(&rawValue)) {
-      return false;
-    }
-
-    if (rawValue != 0 && rawValue != 1) {
-      return false;
-    }
-
-    value = (rawValue == 1);
-    return true;
-  }
-
-  MOZ_MUST_USE bool
-  ReadState(/*out*/ SecurityPropertyState& state)
-  {
-    uint32_t rawValue;
-    if (!ReadInteger(&rawValue)) {
-      return false;
-    }
-
-    state = static_cast<SecurityPropertyState>(rawValue);
-    switch (state) {
-      case SecurityPropertyKnockout:
-      case SecurityPropertyNegative:
-      case SecurityPropertySet:
-      case SecurityPropertyUnset:
-        break;
-      default:
-        return false;
-    }
-
-    return true;
-  }
-
-  MOZ_MUST_USE bool
-  ReadSource(/*out*/ SecurityPropertySource& source)
-  {
-    uint32_t rawValue;
-    if (!ReadInteger(&rawValue)) {
-      return false;
-    }
-
-    source = static_cast<SecurityPropertySource>(rawValue);
-    switch (source) {
-      case SourceUnknown:
-      case SourcePreload:
-      case SourceOrganic:
-      case SourceHSTSPriming:
-        break;
-      default:
-        return false;
-    }
-
-    return true;
-  }
-
-  // Note: Ideally, this method would be able to read SHA256 strings without
-  // reading all the way to EOF. Unfortunately, if a token starts with digits
-  // mozilla::Tokenizer will by default not consider the digits part of the
-  // string. This can be worked around by making mozilla::Tokenizer consider
-  // digit characters as "word" characters as well, but this can't be changed at
-  // run time, meaning parsing digits as a number will fail.
-  MOZ_MUST_USE bool
-  ReadUntilEOFAsSHA256Keys(/*out*/ nsTArray<nsCString>& keys)
-  {
-    nsAutoCString mergedKeys;
-    if (!ReadUntil(Token::EndOfFile(), mergedKeys, EXCLUDE_LAST)) {
-      return false;
-    }
-
-    // This check makes sure the Substring() calls below are always valid.
-    static const uint32_t SHA256Base64Len = 44;
-    if (mergedKeys.Length() % SHA256Base64Len != 0) {
-      return false;
-    }
-
-    for (uint32_t i = 0; i < mergedKeys.Length(); i += SHA256Base64Len) {
-      nsAutoCString key(Substring(mergedKeys, i, SHA256Base64Len));
-      if (!stringIsBase64EncodingOf256bitValue(key)) {
-        return false;
-      }
-      keys.AppendElement(key);
-    }
-
-    return !keys.IsEmpty();
-  }
-};
-
-// Parses a state string like "1500918564034,1,1" into its constituent parts.
-bool
-ParseHSTSState(const nsCString& stateString,
-       /*out*/ PRTime& expireTime,
-       /*out*/ SecurityPropertyState& state,
-       /*out*/ bool& includeSubdomains,
-       /*out*/ SecurityPropertySource& source)
-{
-  SSSTokenizer tokenizer(stateString);
-  SSSLOG(("Parsing state from %s", stateString.get()));
-
-  if (!tokenizer.ReadInteger(&expireTime)) {
-    return false;
-  }
-
-  if (!tokenizer.CheckChar(',')) {
-    return false;
-  }
-
-  if (!tokenizer.ReadState(state)) {
-    return false;
-  }
-
-  if (!tokenizer.CheckChar(',')) {
-    return false;
-  }
-
-  if (!tokenizer.ReadBool(includeSubdomains)) {
-    return false;
-  }
-
-  source = SourceUnknown;
-  if (tokenizer.CheckChar(',')) {
-    if (!tokenizer.ReadSource(source)) {
-      return false;
-    }
-  }
-
-  return tokenizer.CheckEOF();
-}
-
 } // namespace
 
 SiteHSTSState::SiteHSTSState(const nsCString& aHost,
@@ -223,9 +82,7 @@ SiteHSTSState::SiteHSTSState(const nsCString& aHost,
   , mHSTSIncludeSubdomains(false)
   , mHSTSSource(SourceUnknown)
 {
-  bool valid = ParseHSTSState(aStateString, mHSTSExpireTime, mHSTSState,
-                              mHSTSIncludeSubdomains, mHSTSSource);
-  if (!valid) {
+  {
     SSSLOG(("%s is not a valid SiteHSTSState", aStateString.get()));
     mHSTSExpireTime = 0;
     mHSTSState = SecurityPropertyUnset;
@@ -308,66 +165,6 @@ SiteHSTSState::GetOriginAttributes(JSContext* aCx,
 
 NS_IMPL_ISUPPORTS(SiteHPKPState, nsISiteSecurityState, nsISiteHPKPState)
 
-namespace {
-
-// Parses a state string like
-// "1494603034103,1,1,AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=" into its
-// constituent parts.
-bool
-ParseHPKPState(const nsCString& stateString,
-       /*out*/ PRTime& expireTime,
-       /*out*/ SecurityPropertyState& state,
-       /*out*/ bool& includeSubdomains,
-       /*out*/ nsTArray<nsCString>& sha256keys)
-{
-  SSSTokenizer tokenizer(stateString);
-
-  if (!tokenizer.ReadInteger(&expireTime)) {
-    return false;
-  }
-
-  if (!tokenizer.CheckChar(',')) {
-    return false;
-  }
-
-  if (!tokenizer.ReadState(state)) {
-    return false;
-  }
-
-  // SecurityPropertyNegative isn't a valid state for HPKP.
-  switch (state) {
-    case SecurityPropertyKnockout:
-    case SecurityPropertySet:
-    case SecurityPropertyUnset:
-      break;
-    case SecurityPropertyNegative:
-    default:
-      return false;
-  }
-
-  if (!tokenizer.CheckChar(',')) {
-    return false;
-  }
-
-  if (!tokenizer.ReadBool(includeSubdomains)) {
-    return false;
-  }
-
-  if (!tokenizer.CheckChar(',')) {
-    return false;
-  }
-
-  if (state == SecurityPropertySet) {
-    // This reads to the end of input, so there's no need to explicitly check
-    // for EOF.
-    return tokenizer.ReadUntilEOFAsSHA256Keys(sha256keys);
-  }
-
-  return tokenizer.CheckEOF();
-}
-
-} // namespace
-
 SiteHPKPState::SiteHPKPState()
   : mExpireTime(0)
   , mState(SecurityPropertyUnset)
@@ -384,9 +181,7 @@ SiteHPKPState::SiteHPKPState(const nsCString& aHost,
   , mState(SecurityPropertyUnset)
   , mIncludeSubdomains(false)
 {
-  bool valid = ParseHPKPState(aStateString, mExpireTime, mState,
-                              mIncludeSubdomains, mSHA256keys);
-  if (!valid) {
+  {
     SSSLOG(("%s is not a valid SiteHPKPState", aStateString.get()));
     mExpireTime = 0;
     mState = SecurityPropertyUnset;
@@ -687,10 +482,6 @@ nsSiteSecurityService::RemoveStateInternal(
     return NS_ERROR_INVALID_ARG;
   }
 
-  bool isPrivate = aFlags & nsISocketProvider::NO_PERMANENT_STORAGE;
-  mozilla::DataStorageType storageType = isPrivate
-                                         ? mozilla::DataStorage_Private
-                                         : mozilla::DataStorage_Persistent;
   // If this host is in the preload list, we have to store a knockout entry.
   nsAutoCString storageKey;
   SetStorageKey(aHost, aType, aOriginAttributes, storageKey);
