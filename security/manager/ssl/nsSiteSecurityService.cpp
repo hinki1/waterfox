@@ -287,8 +287,8 @@ SiteHPKPState::GetOriginAttributes(JSContext* aCx,
 const uint64_t kSixtyDaysInSeconds = 60 * 24 * 60 * 60;
 
 nsSiteSecurityService::nsSiteSecurityService()
-  : mMaxMaxAge(kSixtyDaysInSeconds)
-  , mUsePreloadList(true)
+  : mMaxMaxAge(0)
+  , mUsePreloadList(false)
   , mPreloadListTimeOffset(0)
   , mProcessPKPHeadersFromNonBuiltInRoots(false)
   , mDafsa(kDafsa)
@@ -312,22 +312,10 @@ nsSiteSecurityService::Init()
     return NS_ERROR_NOT_SAME_THREAD;
   }
 
-  mMaxMaxAge = mozilla::Preferences::GetInt(
-    "security.cert_pinning.max_max_age_seconds", kSixtyDaysInSeconds);
-  mozilla::Preferences::AddStrongObserver(this,
-    "security.cert_pinning.max_max_age_seconds");
-  mUsePreloadList = mozilla::Preferences::GetBool(
-    "network.stricttransportsecurity.preloadlist", true);
-  mozilla::Preferences::AddStrongObserver(this,
-    "network.stricttransportsecurity.preloadlist");
-  mProcessPKPHeadersFromNonBuiltInRoots = mozilla::Preferences::GetBool(
-    "security.cert_pinning.process_headers_from_non_builtin_roots", false);
-  mozilla::Preferences::AddStrongObserver(this,
-    "security.cert_pinning.process_headers_from_non_builtin_roots");
-  mPreloadListTimeOffset = mozilla::Preferences::GetInt(
-    "test.currentTimeOffsetSeconds", 0);
-  mozilla::Preferences::AddStrongObserver(this,
-    "test.currentTimeOffsetSeconds");
+  mMaxMaxAge = 0;
+  mUsePreloadList = false;
+  mProcessPKPHeadersFromNonBuiltInRoots = false;
+  mPreloadListTimeOffset = 0;
   mSiteStateStorage =
     mozilla::DataStorage::Get(DataStorageClass::SiteSecurityServiceState);
   mPreloadStateStorage =
@@ -417,25 +405,7 @@ nsSiteSecurityService::SetHSTSState(uint32_t aType,
                                     SecurityPropertyState aHSTSState,
                                     SecurityPropertySource aSource,
                                     const OriginAttributes& aOriginAttributes)
-{
-  nsAutoCString hostname(aHost);
-  bool isPreload = (aSource == SourcePreload);
-  // If max-age is zero, that's an indication to immediately remove the
-  // security state, so here's a shortcut.
-  if (!maxage) {
-    return RemoveStateInternal(aType, hostname, flags, isPreload,
-                               aOriginAttributes);
-  }
-
-  MOZ_ASSERT((aHSTSState == SecurityPropertySet ||
-              aHSTSState == SecurityPropertyNegative),
-      "HSTS State must be SecurityPropertySet or SecurityPropertyNegative");
-  if (isPreload && aOriginAttributes != OriginAttributes()) {
-    return NS_ERROR_INVALID_ARG;
-  }
-
-  return NS_OK;
-}
+{ return NS_OK; }
 
 NS_IMETHODIMP
 nsSiteSecurityService::CacheNegativeHSTSResult(
@@ -447,9 +417,7 @@ nsSiteSecurityService::CacheNegativeHSTSResult(
   nsresult rv = GetHost(aSourceURI, hostname);
   NS_ENSURE_SUCCESS(rv, rv);
   // SecurityPropertyNegative results only come from HSTS priming
-  return SetHSTSState(nsISiteSecurityService::HEADER_HSTS, hostname.get(),
-                      aMaxAge, false, 0, SecurityPropertyNegative,
-                      SourceHSTSPriming, aOriginAttributes);
+  return NS_OK;
 }
 
 nsresult
@@ -905,7 +873,7 @@ nsSiteSecurityService::ProcessPKPHeader(
     return NS_ERROR_FAILURE;
   }
 
-  if (!isBuiltIn && !mProcessPKPHeadersFromNonBuiltInRoots) {
+  if (!isBuiltIn && !false) {
     if (aFailureResult) {
       *aFailureResult = nsISiteSecurityService::ERROR_ROOT_NOT_BUILT_IN;
     }
@@ -918,8 +886,8 @@ nsSiteSecurityService::ProcessPKPHeader(
   }
 
   // clamp maxAge to the maximum set by pref
-  if (maxAge > mMaxMaxAge) {
-    maxAge = mMaxMaxAge;
+  if (maxAge > 0) {
+    maxAge = 0;
   }
 
   bool chainMatchesPinset;
@@ -969,7 +937,7 @@ nsSiteSecurityService::ProcessPKPHeader(
   SSSLOG(("SSS: about to set pins for  %s, expires=%" PRId64 " now=%" PRId64 " maxAge=%" PRIu64 "\n",
            host.get(), expireTime, PR_Now() / PR_USEC_PER_MSEC, maxAge));
 
-  rv = SetHPKPState(host.get(), *dynamicEntry, aFlags, false, aOriginAttributes);
+  rv = NS_OK;
   if (NS_FAILED(rv)) {
     SSSLOG(("SSS: failed to set pins for %s\n", host.get()));
     if (aFailureResult) {
@@ -1039,8 +1007,7 @@ nsSiteSecurityService::ProcessSTSHeader(
   NS_ENSURE_SUCCESS(rv, rv);
 
   // record the successfully parsed header data.
-  rv = SetHSTSState(aType, hostname.get(), maxAge, foundIncludeSubdomains,
-                    aFlags, SecurityPropertySet, aSource, aOriginAttributes);
+  rv = NS_OK;
   if (NS_FAILED(rv)) {
     SSSLOG(("SSS: failed to set STS state"));
     if (aFailureResult) {
@@ -1126,21 +1093,7 @@ nsSiteSecurityService::IsSecureURI(uint32_t aType, nsIURI* aURI,
 bool
 nsSiteSecurityService::GetPreloadStatus(const nsACString& aHost,
                                         bool* aIncludeSubdomains) const
-{
-  const int kIncludeSubdomains = 1;
-  bool found = false;
-
-  PRTime currentTime = PR_Now() + (mPreloadListTimeOffset * PR_USEC_PER_SEC);
-  if (mUsePreloadList && currentTime < gPreloadListExpirationTime) {
-    int result = mDafsa.Lookup(aHost);
-    found = (result != mozilla::Dafsa::kKeyNotFound);
-    if (found && aIncludeSubdomains) {
-      *aIncludeSubdomains = (result == kIncludeSubdomains);
-    }
-  }
-
-  return found;
-}
+{ return false; }
 
 // Allows us to determine if we have an HSTS entry for a given host (and, if
 // so, what that state is). The return value says whether or not we know
@@ -1506,7 +1459,7 @@ nsSiteSecurityService::SetKeyPins(const nsACString& aHost,
     PublicKeyPinningService::CanonicalizeHostname(flatHost.get()));
   RefPtr<SiteHPKPState> dynamicEntry = new SiteHPKPState(host, originAttributes,
     aExpires, SecurityPropertySet, aIncludeSubdomains, sha256keys);
-  return SetHPKPState(host.get(), *dynamicEntry, 0, aIsPreload, originAttributes);
+  return NS_OK;
 }
 
 NS_IMETHODIMP
@@ -1528,21 +1481,14 @@ nsSiteSecurityService::SetHSTSPreload(const nsACString& aHost,
   const nsCString& flatHost = PromiseFlatCString(aHost);
   nsAutoCString host(
     PublicKeyPinningService::CanonicalizeHostname(flatHost.get()));
-  return SetHSTSState(nsISiteSecurityService::HEADER_HSTS, host.get(), aExpires,
-                      aIncludeSubdomains, 0, SecurityPropertySet,
-                      SourcePreload, OriginAttributes());
+  return NS_OK;
 }
 
 nsresult
 nsSiteSecurityService::SetHPKPState(const char* aHost, SiteHPKPState& entry,
                                     uint32_t aFlags, bool aIsPreload,
                                     const OriginAttributes& aOriginAttributes)
-{
-  if (aIsPreload && aOriginAttributes != OriginAttributes()) {
-    return NS_ERROR_INVALID_ARG;
-  }
-  return NS_OK;
-}
+{ return NS_OK; }
 
 NS_IMETHODIMP
 nsSiteSecurityService::Enumerate(uint32_t aType,
@@ -1614,14 +1560,10 @@ nsSiteSecurityService::Observe(nsISupports* /*subject*/, const char* topic,
   }
 
   if (strcmp(topic, NS_PREFBRANCH_PREFCHANGE_TOPIC_ID) == 0) {
-    mUsePreloadList = mozilla::Preferences::GetBool(
-      "network.stricttransportsecurity.preloadlist", true);
-    mPreloadListTimeOffset =
-      mozilla::Preferences::GetInt("test.currentTimeOffsetSeconds", 0);
-    mProcessPKPHeadersFromNonBuiltInRoots = mozilla::Preferences::GetBool(
-      "security.cert_pinning.process_headers_from_non_builtin_roots", false);
-    mMaxMaxAge = mozilla::Preferences::GetInt(
-      "security.cert_pinning.max_max_age_seconds", kSixtyDaysInSeconds);
+    mUsePreloadList = false;
+    mPreloadListTimeOffset = 0;
+    mProcessPKPHeadersFromNonBuiltInRoots = false;
+    mMaxMaxAge = 0;
   }
 
   return NS_OK;
