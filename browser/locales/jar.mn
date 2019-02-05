@@ -120,9 +120,6 @@
 % override chrome://global/locale/netError.dtd chrome://browser/locale/netError.dtd
 % override chrome://global/locale/appstrings.properties chrome://browser/locale/appstrings.properties
 % override chrome://mozapps/locale/downloads/settingsChange.dtd chrome://browser/locale/downloads/settingsChange.dtd
-% locale pdf.js @AB_CD@ %locale/pdfviewer/
-    locale/pdfviewer/viewer.properties             (%pdfviewer/viewer.properties)
-    locale/pdfviewer/chrome.properties             (%pdfviewer/chrome.properties)
 
 #ifdef XPI_NAME
 # Bug 1240628, restructure how l10n repacks work with feature addons
