@@ -17,51 +17,15 @@ XPCOMUtils.defineLazyModuleGetter(this, "AppConstants",
   "resource://gre/modules/AppConstants.jsm");
 XPCOMUtils.defineLazyModuleGetter(this, "AutoMigrate",
   "resource:///modules/AutoMigrate.jsm");
-XPCOMUtils.defineLazyModuleGetter(this, "fxAccounts",
-  "resource://gre/modules/FxAccounts.jsm");
+/*XPCOMUtils.defineLazyModuleGetter(this, "fxAccounts",
+  "resource://gre/modules/FxAccounts.jsm");*/
 XPCOMUtils.defineLazyModuleGetter(this, "PrivateBrowsingUtils",
   "resource://gre/modules/PrivateBrowsingUtils.jsm");
 
 this.AboutHomeUtils = {
 
-  /*
-   * showKnowYourRights - Determines if the user should be shown the
-   * about:rights notification. The notification should *not* be shown if
-   * we've already shown the current version, or if the override pref says to
-   * never show it. The notification *should* be shown if it's never been seen
-   * before, if a newer version is available, or if the override pref says to
-   * always show it.
-   */
   get showKnowYourRights() {
-    // Look for an unconditional override pref. If set, do what it says.
-    // (true --> never show, false --> always show)
-    try {
-      return !Services.prefs.getBoolPref("browser.rights.override");
-    } catch (e) { }
-    // Ditto, for the legacy EULA pref.
-    try {
-      return !Services.prefs.getBoolPref("browser.EULA.override");
-    } catch (e) { }
-
-    if (!AppConstants.MOZILLA_OFFICIAL) {
-      // Non-official builds shouldn't show the notification.
-      return false;
-    }
-
-    // Look to see if the user has seen the current version or not.
-    var currentVersion = Services.prefs.getIntPref("browser.rights.version");
-    try {
-      return !Services.prefs.getBoolPref("browser.rights." + currentVersion + ".shown");
-    } catch (e) { }
-
-    // Legacy: If the user accepted a EULA, we won't annoy them with the
-    // equivalent about:rights page until the version changes.
-    try {
-      return !Services.prefs.getBoolPref("browser.EULA." + currentVersion + ".accepted");
-    } catch (e) { }
-
-    // We haven't shown the notification before, so do so now.
-    return true;
+    return false;
   }
 };
 
@@ -151,12 +115,6 @@ var AboutHome = {
         showRestoreLastSession: ss.canRestoreLastSession,
         showKnowYourRights: AboutHomeUtils.showKnowYourRights,
       };
-
-      if (AboutHomeUtils.showKnowYourRights) {
-        // Set pref to indicate we've shown the notification.
-        let currentVersion = Services.prefs.getIntPref("browser.rights.version");
-        Services.prefs.setBoolPref("browser.rights." + currentVersion + ".shown", true);
-      }
 
       if (target && target.messageManager) {
         target.messageManager.sendAsyncMessage("AboutHome:Update", data);
