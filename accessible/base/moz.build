@@ -67,14 +67,9 @@ LOCAL_INCLUDES += [
     '/dom/xul',
 ]
 
-if CONFIG['OS_ARCH'] == 'WINNT':
-    LOCAL_INCLUDES += [
-        '/accessible/ipc/win',
-    ]
-else:
-    LOCAL_INCLUDES += [
-        '/accessible/ipc/other',
-    ]
+LOCAL_INCLUDES += [
+    '/accessible/ipc/other',
+]
 
 LOCAL_INCLUDES += [
     '/accessible/xpcom',
@@ -94,11 +89,6 @@ if 'gtk' in CONFIG['MOZ_WIDGET_TOOLKIT']:
         '/accessible/atk',
     ]
     CXXFLAGS += CONFIG['MOZ_CAIRO_CFLAGS']
-elif CONFIG['MOZ_WIDGET_TOOLKIT'] == 'windows':
-    LOCAL_INCLUDES += [
-        '/accessible/windows/ia2',
-        '/accessible/windows/msaa',
-    ]
 elif CONFIG['MOZ_WIDGET_TOOLKIT'] == 'cocoa':
     LOCAL_INCLUDES += [
         '/accessible/mac',

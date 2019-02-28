@@ -32,37 +32,7 @@ UNIFIED_SOURCES += [
     'src/chrome/common/ipc_message.cc',
 ]
 
-if os_win:
-    SOURCES += [
-        'src/base/condition_variable_win.cc',
-        'src/base/cpu.cc',
-        'src/base/file_util_win.cc',
-        'src/base/lock_impl_win.cc',
-        'src/base/message_pump_win.cc',
-        'src/base/object_watcher.cc',
-        'src/base/platform_file_win.cc',
-        'src/base/platform_thread_win.cc',
-        'src/base/process_util_win.cc',
-        'src/base/process_win.cc',
-        'src/base/rand_util_win.cc',
-        'src/base/shared_memory_win.cc',
-        'src/base/sys_info_win.cc',
-        'src/base/sys_string_conversions_win.cc',
-        'src/base/thread_local_storage_win.cc',
-        'src/base/thread_local_win.cc',
-        'src/base/time_win.cc',
-        'src/base/waitable_event_win.cc',
-        'src/base/win_util.cc',
-        'src/chrome/common/ipc_channel_win.cc',
-        'src/chrome/common/process_watcher_win.cc',
-        'src/chrome/common/transport_dib_win.cc',
-    ]
-
-    EXPORTS.base += [
-        'src/base/child_privileges.h',
-    ]
-
-elif not CONFIG['MOZ_SYSTEM_LIBEVENT']:
+if not CONFIG['MOZ_SYSTEM_LIBEVENT']:
     DIRS += ['src/third_party']
 
 if os_posix:
