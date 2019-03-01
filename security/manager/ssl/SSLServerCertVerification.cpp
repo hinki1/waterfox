@@ -258,7 +258,7 @@ class CertErrorRunnable : public SyncRunnableBase
       mCollectedErrors(collectedErrors),
       mErrorCodeTrust(errorCodeTrust),
       mErrorCodeMismatch(errorCodeMismatch),
-      mErrorCodeTime(errorCodeTime),
+      mErrorCodeTime(errorCodeTime)
   {
   }
 
