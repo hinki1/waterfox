@@ -259,7 +259,6 @@ class CertErrorRunnable : public SyncRunnableBase
       mErrorCodeTrust(errorCodeTrust),
       mErrorCodeMismatch(errorCodeMismatch),
       mErrorCodeTime(errorCodeTime),
-      mProviderFlags(providerFlags)
   {
   }
 
@@ -276,7 +275,6 @@ private:
   const PRErrorCode mErrorCodeTrust;
   const PRErrorCode mErrorCodeMismatch;
   const PRErrorCode mErrorCodeTime;
-  const uint32_t mProviderFlags;
 };
 
 // A probe value of 1 means "no error".
