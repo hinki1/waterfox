@@ -1978,22 +1978,6 @@ nsPluginHost::AddPluginTag(nsPluginTag* aPluginTag)
   }
 }
 
-static bool
-PluginInfoIsFlash(const nsPluginInfo& info)
-{
-  if (!info.fName || strcmp(info.fName, "Shockwave Flash") != 0) {
-    return false;
-  }
-  for (uint32_t i = 0; i < info.fVariantCount; ++i) {
-    if (info.fMimeTypeArray[i] &&
-        (!strcmp(info.fMimeTypeArray[i], "application/x-shockwave-flash") ||
-         !strcmp(info.fMimeTypeArray[i], "application/x-shockwave-flash-test"))) {
-      return true;
-    }
-  }
-  return false;
-}
-
 typedef NS_NPAPIPLUGIN_CALLBACK(char *, NP_GETMIMEDESCRIPTION)(void);
 
 nsresult nsPluginHost::ScanPluginsDirectory(nsIFile *pluginsDir,
@@ -2013,8 +1997,6 @@ nsresult nsPluginHost::ScanPluginsDirectory(nsIFile *pluginsDir,
   PLUGIN_LOG(PLUGIN_LOG_BASIC,
   ("nsPluginHost::ScanPluginsDirectory dir=%s\n", dirPath.get()));
 #endif
-
-  bool flashOnly = Preferences::GetBool("plugin.load_flash_only", true);
 
   nsCOMPtr<nsISimpleEnumerator> iter;
   rv = pluginsDir->GetDirectoryEntries(getter_AddRefs(iter));
@@ -2768,14 +2750,13 @@ nsPluginHost::WritePluginInfo()
     return rv;
   }
 
-  bool flashOnly = Preferences::GetBool("plugin.load_flash_only", true);
-
   PR_fprintf(fd, "Generated File. Do not edit.\n");
 
   PR_fprintf(fd, "\n[HEADER]\nVersion%c%s%c%c%c\nArch%c%s%c%c\n",
              PLUGIN_REGISTRY_FIELD_DELIMITER,
              kPluginRegistryVersion,
-             flashOnly ? 't' : 'f',
+             // Use the flash-only pref as always false
+             'f',
              PLUGIN_REGISTRY_FIELD_DELIMITER,
              PLUGIN_REGISTRY_END_OF_LINE_MARKER,
              PLUGIN_REGISTRY_FIELD_DELIMITER,
@@ -2971,10 +2952,9 @@ nsPluginHost::ReadPluginInfo()
     return rv;
 
   // If we're reading an old registry, ignore it
-  // If we flipped the flash-only pref, ignore it
-  bool flashOnly = Preferences::GetBool("plugin.load_flash_only", true);
+  // Use the flash-only pref as always false
   nsAutoCString expectedVersion(kPluginRegistryVersion);
-  expectedVersion.Append(flashOnly ? 't' : 'f');
+  expectedVersion.Append('f');
 
   if (!expectedVersion.Equals(values[1])) {
     return rv;
