@@ -84,14 +84,7 @@ public:
   bool mIncludeSubdomains;
   nsTArray<nsCString> mSHA256keys;
 
-  bool IsExpired(mozilla::pkix::Time aTime)
-  {
-    if (aTime > mozilla::pkix::TimeFromEpochInSeconds(mExpireTime /
-                                                      PR_MSEC_PER_SEC)) {
-      return true;
-    }
-    return false;
-  }
+  bool IsExpired(mozilla::pkix::Time aTime) { return true; }
 
   void ToString(nsCString& aString);
 
@@ -132,21 +125,7 @@ public:
   bool mHSTSIncludeSubdomains;
   SecurityPropertySource mHSTSSource;
 
-  bool IsExpired(uint32_t aType)
-  {
-    // If mHSTSExpireTime is 0, this entry never expires (this is the case for
-    // knockout entries).
-    if (mHSTSExpireTime == 0) {
-      return false;
-    }
-
-    PRTime now = PR_Now() / PR_USEC_PER_MSEC;
-    if (now > mHSTSExpireTime) {
-      return true;
-    }
-
-    return false;
-  }
+  bool IsExpired(uint32_t aType) { return true; }
 
   void ToString(nsCString &aString);
 
@@ -172,11 +151,6 @@ protected:
 
 private:
   nsresult GetHost(nsIURI *aURI, nsACString &aResult);
-  nsresult SetHSTSState(uint32_t aType, const char* aHost, int64_t maxage,
-                        bool includeSubdomains, uint32_t flags,
-                        SecurityPropertyState aHSTSState,
-                        SecurityPropertySource aSource,
-                        const OriginAttributes& aOriginAttributes);
   nsresult ProcessHeaderInternal(uint32_t aType, nsIURI* aSourceURI,
                                  const nsCString& aHeader,
                                  nsISSLStatus* aSSLStatus,
@@ -209,21 +183,14 @@ private:
                         const OriginAttributes& aOriginAttributes,
                         bool* aResult, bool* aCached,
                         SecurityPropertySource* aSource);
-  bool GetPreloadStatus(const nsACString& aHost,
-                        /*optional out*/ bool* aIncludeSubdomains = nullptr) const;
   nsresult IsSecureHost(uint32_t aType, const nsACString& aHost,
                         uint32_t aFlags,
                         const OriginAttributes& aOriginAttributes,
                         bool* aCached, SecurityPropertySource* aSource,
                         bool* aResult);
 
-  uint64_t mMaxMaxAge;
-  bool mUsePreloadList;
-  int64_t mPreloadListTimeOffset;
-  bool mProcessPKPHeadersFromNonBuiltInRoots;
   RefPtr<mozilla::DataStorage> mSiteStateStorage;
   RefPtr<mozilla::DataStorage> mPreloadStateStorage;
-  const mozilla::Dafsa mDafsa;
 };
 
 #endif // __nsSiteSecurityService_h__
