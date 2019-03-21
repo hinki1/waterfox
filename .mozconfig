@@ -40,6 +40,7 @@ ac_add_options --with-app-basename=Waterfox
 ac_add_options --with-branding=browser/branding/unofficial
 ac_add_options --with-distribution-id=org.waterfoxproject
 
-ac_add_options --with-system-nspr
 # libnss3 3.27 required
 #ac_add_options --with-system-nss
+# fails without system-nss
+#ac_add_options --with-system-nspr
