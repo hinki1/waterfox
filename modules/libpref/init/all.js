@@ -45,7 +45,7 @@ pref("general.useragent.override.amazon.co.jp", "Mozilla/5.0 (Macintosh; Intel M
 #ifdef XP_LINUX
 pref("general.useragent.override.addons.mozilla.org", "Mozilla/5.0 (X11; Linux x86_64; rv:57.0) Gecko/20100101 Firefox/57.0");
 pref("general.useragent.override.amazon.com", "Mozilla/5.0 (X11; Linux x86_64; rv:65.0) Gecko/20100101 Firefox/65.0");
-pref("general.useragent.override.amazon.co.uk", "Mozilla/5.0 (X11; Linux x86_64; Win64; rv:65.0) Gecko/20100101 Firefox/65.0");
+pref("general.useragent.override.amazon.co.uk", "Mozilla/5.0 (X11; Linux x86_64; rv:65.0) Gecko/20100101 Firefox/65.0");
 pref("general.useragent.override.amazon.de", "Mozilla/5.0 (X11; Linux x86_64; rv:65.0) Gecko/20100101 Firefox/65.0");
 pref("general.useragent.override.amazon.co.jp", "Mozilla/5.0 (X11; Linux x86_64; rv:65.0) Gecko/20100101 Firefox/65.0");
 #endif
@@ -656,7 +656,7 @@ pref("media.video-queue.default-size", 10);
 pref("media.video-queue.send-to-compositor-size", 9999);
 
 // Whether to disable the video stats to prevent fingerprinting
-sticky_pref("media.video_stats.enabled", false);
+pref("media.video_stats.enabled", false);
 
 // Whether to check the decoder supports recycling.
 pref("media.decoder.recycle.enabled", false);
@@ -1434,6 +1434,7 @@ pref("javascript.options.strict",           false);
 #ifdef DEBUG
 pref("javascript.options.strict.debug",     false);
 #endif
+pref("javascript.options.unboxed_objects",  false);
 pref("javascript.options.baselinejit",      true);
 pref("javascript.options.ion",              true);
 pref("javascript.options.asmjs",            true);
