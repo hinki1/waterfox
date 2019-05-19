@@ -11,9 +11,3 @@ DIRS += [
     'common',
     'crypto',
 ]
-
-if CONFIG['MOZ_WIDGET_TOOLKIT'] != 'android':
-    DIRS += [
-        'fxaccounts',
-        'blocklists',
-    ]
