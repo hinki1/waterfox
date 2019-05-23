@@ -15,7 +15,6 @@ const kDragDataTypePrefix = "text/toolbarwrapper-id/";
 const kPlaceholderClass = "panel-customization-placeholder";
 const kSkipSourceNodePref = "browser.uiCustomization.skipSourceNodeCheck";
 const kToolbarVisibilityBtn = "customization-toolbar-visibility-button";
-const kDrawInTitlebarPref = "browser.tabs.drawInTitlebar";
 const kMaxTransitionDurationMs = 2000;
 
 const kPanelItemContextMenu = "customizationPanelItemContextMenu";
@@ -112,10 +111,6 @@ function CustomizeMode(aWindow) {
     let lwthemeButton = this.document.getElementById("customization-lwtheme-button");
     lwthemeButton.setAttribute("hidden", "true");
   }
-  if (AppConstants.CAN_DRAW_IN_TITLEBAR) {
-    this._updateTitlebarCheckbox();
-    Services.prefs.addObserver(kDrawInTitlebarPref, this);
-  }
   this.window.addEventListener("unload", this);
 }
 
@@ -148,9 +143,6 @@ CustomizeMode.prototype = {
   },
 
   uninit() {
-    if (AppConstants.CAN_DRAW_IN_TITLEBAR) {
-      Services.prefs.removeObserver(kDrawInTitlebarPref, this);
-    }
   },
 
   toggle() {
@@ -1706,9 +1698,6 @@ CustomizeMode.prototype = {
       case "nsPref:changed":
         this._updateResetButton();
         this._updateUndoResetButton();
-        if (AppConstants.CAN_DRAW_IN_TITLEBAR) {
-          this._updateTitlebarCheckbox();
-        }
         break;
       case "lightweight-theme-window-updated":
         if (aSubject == this.window) {
@@ -1719,28 +1708,7 @@ CustomizeMode.prototype = {
     }
   },
 
-  _updateTitlebarCheckbox() {
-    if (!AppConstants.CAN_DRAW_IN_TITLEBAR) {
-      return;
-    }
-    let drawInTitlebar = Services.prefs.getBoolPref(kDrawInTitlebarPref, true);
-    let checkbox = this.document.getElementById("customization-titlebar-visibility-checkbox");
-    // Drawing in the titlebar means 'hiding' the titlebar.
-    // We use the attribute rather than a property because if we're not in
-    // customize mode the button is hidden and properties don't work.
-    if (drawInTitlebar) {
-      checkbox.removeAttribute("checked");
-    } else {
-      checkbox.setAttribute("checked", "true");
-    }
-  },
-
   toggleTitlebar(aShouldShowTitlebar) {
-    if (!AppConstants.CAN_DRAW_IN_TITLEBAR) {
-      return;
-    }
-    // Drawing in the titlebar means not showing the titlebar, hence the negation:
-    Services.prefs.setBoolPref(kDrawInTitlebarPref, !aShouldShowTitlebar);
   },
 
   get _dwu() {
