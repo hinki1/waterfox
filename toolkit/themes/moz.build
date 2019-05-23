@@ -18,14 +18,8 @@
 toolkit = CONFIG['MOZ_WIDGET_TOOLKIT']
 app = CONFIG['MOZ_BUILD_APP']
 
-if toolkit == 'cocoa':
-    DIRS += ['osx']
-elif toolkit in ('gtk2', 'gtk3'):
+if toolkit in ('gtk2', 'gtk3'):
     DIRS += ['linux']
-elif app == 'mobile/android':
-    DIRS += ['mobile']
-else:
-    DIRS += ['windows']
 
 with Files('**'):
     BUG_COMPONENT = ('Toolkit', 'Themes')
