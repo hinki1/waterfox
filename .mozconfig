@@ -4,12 +4,13 @@
 if test `uname -s` = Linux; then
 export CC=clang-4.0
 export CXX=clang++-4.0
-ac_add_options --enable-optimize
+ac_add_options --enable-optimize="-O2 -msse3 -march=x86-64 -mtune=generic -w"
 ac_add_options --enable-eme=widevine
 ac_add_options --target=x86_64-pc-linux-gnu
 ac_add_options --enable-pulseaudio
 ac_add_options --enable-alsa
-ac_add_options --disable-stylo
+ac_add_options --enable-rust-simd # on x86 requires SSE2
+ac_add_options --enable-stylo=build
 fi
 
 export MOZ_GECKO_PROFILER=
