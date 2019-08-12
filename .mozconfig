@@ -2,8 +2,8 @@
 
 # Linux Specific Options
 if test `uname -s` = Linux; then
-export CC=clang-4.0
-export CXX=clang++-4.0
+export CC=clang
+export CXX=clang++
 ac_add_options --enable-optimize="-O2 -msse3 -march=x86-64 -mtune=generic -w"
 ac_add_options --enable-eme=widevine
 ac_add_options --target=x86_64-pc-linux-gnu
