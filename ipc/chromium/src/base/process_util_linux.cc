@@ -169,7 +169,7 @@ bool LaunchApp(const std::vector<std::string>& argv,
       argv_cstr[i] = const_cast<char*>(argv[i].c_str());
     argv_cstr[argv.size()] = NULL;
 
-    SetCurrentProcessPrivileges(privs);
+    SetCurrentProcessPrivileges(PRIVILEGES_INHERIT);
 
     execve(argv_cstr[0], argv_cstr.get(), envp);
     // if we get here, we're in serious trouble and should complain loudly
