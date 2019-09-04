@@ -4361,7 +4361,10 @@ ObjectGroup::sweep(AutoClearTypeInferenceStateOnOOM* oom)
             if (prop) {
                 oldPropertiesFound++;
                 prop->types.checkMagic();
-                if (singleton() && !prop->types.constraintList() && !zone()->isPreservingCode()) {
+                if (singleton() &&
+                    !prop->types.constraintList() &&
+                    !zone()->isPreservingCode())
+                {
                     /*
                      * Don't copy over properties of singleton objects when their
                      * presence will not be required by jitcode or type constraints
@@ -4393,7 +4396,10 @@ ObjectGroup::sweep(AutoClearTypeInferenceStateOnOOM* oom)
     } else if (propertyCount == 1) {
         Property* prop = (Property*) propertySet;
         prop->types.checkMagic();
-        if (singleton() && !prop->types.constraintList() && !zone()->isPreservingCode()) {
+        if (singleton() &&
+            !prop->types.constraintList() &&
+            !zone()->isPreservingCode())
+        {
             // Skip, as above.
             clearProperties();
         } else {
@@ -4602,6 +4608,7 @@ AutoClearTypeInferenceStateOnOOM::AutoClearTypeInferenceStateOnOOM(Zone* zone)
   : zone(zone), oom(false)
 {
     MOZ_RELEASE_ASSERT(CurrentThreadCanAccessZone(zone));
+    MOZ_ASSERT(!TlsContext.get()->inUnsafeCallWithABI);
     zone->types.setSweepingTypes(true);
 }
 
