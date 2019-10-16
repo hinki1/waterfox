@@ -31,7 +31,7 @@ pref("extensions.logging.enabled", false);
 pref("extensions.strictCompatibility", false);
 
 // Disable compatibility checking due to mish-mash of versions.
-pref("extensions.checkCompatibility.56.2", false);
+pref("extensions.checkCompatibility.56.3", false);
 
 // Specifies a minimum maxVersion an addon needs to say it's compatible with
 // for it to be compatible by default.
@@ -175,13 +175,13 @@ pref("app.update.staging.enabled", true);
 
 // Update service URL:
 #ifdef XP_WIN
-pref("app.update.url", "https://www.waterfox.net/update/win64/%VERSION%/%LOCALE%/%CHANNEL%/update.xml");
+pref("app.update.url", "https://www.waterfox.net/update/win64/%DISPLAY_VERSION%/%LOCALE%/%CHANNEL%/update.xml");
 #endif
 #ifdef XP_MACOSX
-pref("app.update.url", "https://www.waterfox.net/update/osx64/%VERSION%/%LOCALE%/%CHANNEL%/update.xml");
+pref("app.update.url", "https://www.waterfox.net/update/osx64/%DISPLAY_VERSION%/%LOCALE%/%CHANNEL%/update.xml");
 #endif
 #ifdef XP_LINUX
-pref("app.update.url", "https://www.waterfox.net/update/linux64/%VERSION%/%LOCALE%/%CHANNEL%/update.xml");
+pref("app.update.url", "https://www.waterfox.net/update/linux64/%DISPLAY_VERSION%/%LOCALE%/%CHANNEL%/update.xml");
 #endif
 // app.update.url.manual is in branding section
 // app.update.url.details is in branding section

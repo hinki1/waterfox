@@ -405,6 +405,9 @@ pref("media.libavcodec.allow-obsolete", false);
 #if defined(MOZ_FFVPX)
 pref("media.ffvpx.enabled", true);
 #endif
+#ifdef MOZ_AV1
+pref("media.av1.enabled", true);
+#endif
 #if defined(MOZ_FFMPEG) || defined(MOZ_FFVPX)
 pref("media.ffmpeg.low-latency.enabled", false);
 #endif
@@ -1416,6 +1419,8 @@ pref("dom.webcomponents.enabled",           false);
 pref("dom.webcomponents.customelements.enabled", false);
 
 pref("javascript.enabled",                  true);
+// Enable Array.prototype.values
+pref("javascript.options.array_prototype_values", true);
 pref("javascript.options.strict",           false);
 #ifdef DEBUG
 pref("javascript.options.strict.debug",     false);
@@ -3594,6 +3599,8 @@ pref("ui.mouse.radius.inputSource.touchOnly", true);
 
 #ifdef XP_WIN
 
+pref("font.name-list.emoji", "Segoe UI Emoji, Twemoji Mozilla");
+
 pref("font.name-list.serif.ar", "Times New Roman");
 pref("font.name-list.sans-serif.ar", "Segoe UI, Tahoma, Arial");
 pref("font.name-list.monospace.ar", "Courier New");
@@ -3945,6 +3952,8 @@ pref("ui.osk.debug.keyboardDisplayReason", "");
 pref("browser.drag_out_of_frame_style", 1);
 pref("ui.key.saveLink.shift", false); // true = shift, false = meta
 
+pref("font.name-list.emoji", "Apple Color Emoji");
+
 // default fonts (in UTF8 and using canonical names)
 // to determine canonical font names, use a debug build and
 // enable NSPR logging for module fontInfoLog:5
@@ -4270,6 +4279,10 @@ pref("print.print_extra_margin", 0); // twips
 
 // font names
 
+// fontconfig doesn't support emoji yet
+// https://lists.freedesktop.org/archives/fontconfig/2016-October/005842.html
+pref("font.name-list.emoji", "Twemoji Mozilla");
+
 pref("font.name-list.serif.ar", "serif");
 pref("font.name-list.sans-serif.ar", "sans-serif");
 pref("font.name-list.monospace.ar", "monospace");
@@ -4499,6 +4512,8 @@ pref("font.name-list.monospace.x-math", "Fira Mono");
 
 #elif defined(ANDROID)
 // We use the bundled fonts for Firefox for Android
+
+pref("font.name-list.emoji", "Noto Color Emoji");
 
 pref("font.name-list.serif.ar", "Noto Naskh Arabic, Noto Serif, Droid Serif");
 pref("font.name-list.sans-serif.ar", "Noto Naskh Arabic, Clear Sans, Roboto, Droid Sans");
@@ -5040,6 +5055,15 @@ pref("dom.vibrator.max_vibrate_list_len", 128);
 
 // Battery API
 pref("dom.battery.enabled", false);
+
+// Streams API
+pref("dom.streams.enabled", false);
+
+// Abort API
+pref("dom.abortController.enabled", true);
+
+// Fetch + Abort API
+pref("dom.abortController.fetch.enabled", true);
 
 // Push
 
