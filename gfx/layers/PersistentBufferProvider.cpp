@@ -87,9 +87,10 @@ PersistentBufferProviderBasic::Create(gfx::IntSize aSize, gfx::SurfaceFormat aFo
 already_AddRefed<PersistentBufferProviderShared>
 PersistentBufferProviderShared::Create(gfx::IntSize aSize,
                                        gfx::SurfaceFormat aFormat,
-                                       ShadowLayerForwarder* aFwd)
-{
-  if (!aFwd || !aFwd->GetTextureForwarder()->IPCOpen()) {
+                                       ShadowLayerForwarder* aFwd) {
+  if (!aFwd ||
+      !aFwd->GetTextureForwarder() ||
+      !aFwd->GetTextureForwarder()->IPCOpen()) {
     return nullptr;
   }
 
@@ -224,9 +225,10 @@ PersistentBufferProviderShared::GetTexture(const Maybe<uint32_t>& aIndex)
 }
 
 already_AddRefed<gfx::DrawTarget>
-PersistentBufferProviderShared::BorrowDrawTarget(const gfx::IntRect& aPersistedRect)
-{
-  if (!mFwd->GetTextureForwarder()->IPCOpen()) {
+PersistentBufferProviderShared::BorrowDrawTarget(
+    const gfx::IntRect& aPersistedRect) {
+  if (!mFwd->GetTextureForwarder() ||
+      !mFwd->GetTextureForwarder()->IPCOpen()) {
     return nullptr;
   }
 

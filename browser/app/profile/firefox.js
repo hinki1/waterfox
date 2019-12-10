@@ -1513,21 +1513,12 @@ pref("privacy.trackingprotection.introCount", 0);
 pref("privacy.trackingprotection.introURL", "https://www.mozilla.org/%LOCALE%/firefox/%VERSION%/tracking-protection/start/");
 
 // Enable Contextual Identity Containers
-#ifdef NIGHTLY_BUILD
 pref("privacy.userContext.enabled", true);
 pref("privacy.userContext.ui.enabled", true);
 pref("privacy.usercontext.about_newtab_segregation.enabled", true);
 
 // 0 disables long press, 1 when clicked, the menu is shown, 2 the menu is shown after X milliseconds.
 pref("privacy.userContext.longPressBehavior", 2);
-#else
-pref("privacy.userContext.enabled", false);
-pref("privacy.userContext.ui.enabled", false);
-pref("privacy.usercontext.about_newtab_segregation.enabled", false);
-
-// 0 disables long press, 1 when clicked, the menu is shown, 2 the menu is shown after X milliseconds.
-pref("privacy.userContext.longPressBehavior", 0);
-#endif
 
 // Start the browser in e10s mode
 pref("browser.tabs.remote.autostart", true);
@@ -1708,3 +1699,26 @@ pref("browser.onboarding.updatetour", "");
 
 // Preference that allows individual users to disable Screenshots.
 // pref("extensions.screenshots.disabled", true);
+
+
+// Set bool pref for restart browser purgecache enabled.
+pref("browser.restart.purgecache", true);
+
+// Set bool pref for restart browser confirmation.
+pref("browser.restart.requireconfirm", false);
+
+// Set bool pref for restart browser panelUI button
+pref("browser.restart.showpanelmenubtn", false);
+
+// Set prefs for tab context menu copying url options
+pref("browser.tabs.copyurl", true);
+pref("browser.tabs.copyurl.activetab", true);
+pref("browser.tabs.copyallurls", true);
+
+// New Tab page search feature
+pref("browser.newtab.search.enabled", true);
+
+//  New tab toggle thumbnail capture
+// State true no thumbnails will be captured
+// State false default state thumbnails will be captured and added to new tab
+pref("browser.pagethumbnails.capturing_disabled", false);
