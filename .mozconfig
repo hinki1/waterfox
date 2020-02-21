@@ -13,13 +13,12 @@ ac_add_options --enable-rust-simd # on x86 requires SSE2
 ac_add_options --disable-stylo
 fi
 
-ac_add_options --enable-av1
-
 export MOZ_GECKO_PROFILER=
 export MOZ_ENABLE_PROFILER_SPS=
 export MOZ_PROFILING=
+export MOZ_INCLUDE_SOURCE_INFO=1
 
-X=$(($(getconf _NPROCESSORS_ONLN 2>/dev/null || getconf NPROCESSORS_ONLN)*3/2))
+X=$(getconf NPROCESSORS_ONLN 2>/dev/null || getconf _NPROCESSORS_ONLN 2>/dev/null)
 mk_add_options MOZ_MAKE_FLAGS=-j${X%.*}
 mk_add_options AUTOCLOBBER=1
 mk_add_options MOZ_OBJDIR=objdir-classic
@@ -29,10 +28,12 @@ ac_add_options --disable-js-shell
 ac_add_options --disable-maintenance-service
 ac_add_options --disable-profiling
 ac_add_options --disable-signmar
+ac_add_options --disable-stylo
 ac_add_options --disable-tests
 ac_add_options --disable-verify-mar
 
 ac_add_options --enable-application=browser
+ac_add_options --enable-av1
 ac_add_options --enable-release
 ac_add_options --enable-update-channel=release
 ac_add_options --enable-updater
