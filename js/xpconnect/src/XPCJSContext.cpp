@@ -648,8 +648,6 @@ ReloadPrefsCallback(const char* pref, void* data)
     bool extraWarnings = Preferences::GetBool(JS_OPTIONS_DOT_STR "strict");
 
     bool streams = Preferences::GetBool(JS_OPTIONS_DOT_STR "streams");
-    
-    bool unboxedObjects = Preferences::GetBool(JS_OPTIONS_DOT_STR "unboxed_objects");
 
     sSharedMemoryEnabled = Preferences::GetBool(JS_OPTIONS_DOT_STR "shared_memory");
 
@@ -697,7 +695,6 @@ ReloadPrefsCallback(const char* pref, void* data)
                                   useBaselineEager ? 0 : baselineThreshold);
     JS_SetGlobalJitCompilerOption(cx, JSJITCOMPILER_ION_WARMUP_TRIGGER,
                                   useIonEager ? 0 : ionThreshold);
-    JS_SetGlobalJitCompilerOption(cx, JSJITCOMPILER_UNBOXED_OBJECTS, unboxedObjects);
 #ifdef DEBUG
     JS_SetGlobalJitCompilerOption(cx, JSJITCOMPILER_FULL_DEBUG_CHECKS, fullJitDebugChecks);
 #endif
@@ -973,21 +970,6 @@ void
 XPCJSContext::BeforeProcessTask(bool aMightBlock)
 {
     MOZ_ASSERT(NS_IsMainThread());
-
-    // If ProcessNextEvent was called during a Promise "then" callback, we
-    // must process any pending microtasks before blocking in the event loop,
-    // otherwise we may deadlock until an event enters the queue later.
-    if (aMightBlock) {
-        if (Promise::PerformMicroTaskCheckpoint()) {
-            // If any microtask was processed, we post a dummy event in order to
-            // force the ProcessNextEvent call not to block.  This is required
-            // to support nested event loops implemented using a pattern like
-            // "while (condition) thread.processNextEvent(true)", in case the
-            // condition is triggered here by a Promise "then" callback.
-
-            NS_DispatchToMainThread(new Runnable("Empty_microtask_runnable"));
-        }
-    }
 
     // Start the slow script timer.
     mSlowScriptCheckpoint = mozilla::TimeStamp::NowLoRes();

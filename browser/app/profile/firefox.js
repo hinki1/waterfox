@@ -989,7 +989,7 @@ pref("breakpad.reportURL", "");
 
 // URL for "Learn More" for DataCollection
 pref("toolkit.datacollection.infoURL",
-     "https://www.mozilla.org/legal/privacy/firefox.html");
+     "");
 
 // URL for "Learn More" for Crash Reporter
 pref("toolkit.crashreporter.infoURL",
@@ -1439,11 +1439,7 @@ pref("ui.key.menuAccessKeyFocuses", true);
 // permission is granted.
 pref("media.eme.enabled", false);
 
-#ifdef NIGHTLY_BUILD
 pref("media.eme.vp9-in-mp4.enabled", true);
-#else
-pref("media.eme.vp9-in-mp4.enabled", false);
-#endif
 
 pref("media.eme.hdcp-policy-check.enabled", false);
 
@@ -1504,12 +1500,8 @@ sticky_pref("experiments.supported", false);
 // Enable GMP support in the addon manager.
 pref("media.gmp-provider.enabled", true);
 
-#ifdef NIGHTLY_BUILD
 pref("privacy.trackingprotection.ui.enabled", true);
-#else
-pref("privacy.trackingprotection.ui.enabled", false);
-#endif
-pref("privacy.trackingprotection.introCount", 0);
+pref("privacy.trackingprotection.introCount", 1);
 pref("privacy.trackingprotection.introURL", "https://www.mozilla.org/%LOCALE%/firefox/%VERSION%/tracking-protection/start/");
 
 // Enable Contextual Identity Containers
@@ -1647,11 +1639,7 @@ pref("webchannel.allowObject.urlWhitelist", "https://accounts.firefox.com https:
 // Whether or not the browser should scan for unsubmitted
 // crash reports, and then show a notification for submitting
 // those reports.
-#ifdef EARLY_BETA_OR_EARLIER
-pref("browser.crashReports.unsubmittedCheck.enabled", true);
-#else
 pref("browser.crashReports.unsubmittedCheck.enabled", false);
-#endif
 
 // chancesUntilSuppress is how many times we'll show the unsubmitted
 // crash report notification across different days and shutdown

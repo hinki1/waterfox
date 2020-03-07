@@ -288,7 +288,7 @@ pref("browser.autofocus", true);
 // See http://whatwg.org/specs/web-apps/current-work/#ping
 pref("browser.send_pings", false);
 pref("browser.send_pings.max_per_link", 1);           // limit the number of pings that are sent per link click
-pref("browser.send_pings.require_same_host", false);  // only send pings to the same host if this is true
+pref("browser.send_pings.require_same_host", true);  // only send pings to the same host if this is true
 
 pref("browser.display.use_focus_colors",    false);
 pref("browser.display.focus_background_color", "#117722");
@@ -1424,7 +1424,6 @@ pref("javascript.options.strict",           false);
 #ifdef DEBUG
 pref("javascript.options.strict.debug",     false);
 #endif
-pref("javascript.options.unboxed_objects",  false);
 pref("javascript.options.baselinejit",      true);
 pref("javascript.options.ion",              true);
 pref("javascript.options.asmjs",            true);
@@ -1514,7 +1513,7 @@ pref("logging.config.clear_on_startup", true);
 // Allow necko to do A/B testing. Will generally only happen if
 // telemetry is also enabled as otherwise there is no way to report
 // the results
-pref("network.allow-experiments", true);
+pref("network.allow-experiments", false);
 
 // Allow the network changed event to get sent when a network topology or
 // setup change is noticed while running.
@@ -2020,7 +2019,10 @@ pref("network.dns.get-ttl", true);
 pref("network.dnsCacheExpirationGracePeriod", 60);
 
 // This preference can be used to turn off DNS prefetch.
-pref("network.dns.disablePrefetch", false);
+pref("network.dns.disablePrefetch", true);
+
+// This preference can be used to turn off DNS prefetch (HTTPS).
+pref("network.dns.disablePrefetchFromHTTPS", true);
 
 // This preference controls whether .onion hostnames are
 // rejected before being given to DNS. RFC 7686
@@ -2059,12 +2061,12 @@ pref("network.dir.format", 2);
 
 // enables the prefetch service (i.e., prefetching of <link rel="next"> and
 // <link rel="prefetch"> URLs).
-pref("network.prefetch-next", true);
+pref("network.prefetch-next", false);
 // enables the preloading (i.e., preloading of <link rel="preload"> URLs).
 pref("network.preload", true);
 
 // enables the predictive service
-pref("network.predictor.enabled", true);
+pref("network.predictor.enabled", false);
 pref("network.predictor.enable-hover-on-ssl", false);
 pref("network.predictor.enable-prefetch", false);
 pref("network.predictor.page-degradation.day", 0);
@@ -2576,7 +2578,7 @@ pref("extensions.blocklist.interval", 86400);
 // Required blocklist freshness for OneCRL OCSP bypass
 // (default is 1.25x extensions.blocklist.interval, or 30 hours)
 pref("security.onecrl.maximum_staleness_in_seconds", 108000);
-pref("extensions.blocklist.url", "https://blocklists.settings.services.mozilla.com/v1/blocklist/3/%APP_ID%/%APP_VERSION%/%PRODUCT%/%BUILD_ID%/%BUILD_TARGET%/%LOCALE%/%CHANNEL%/%OS_VERSION%/%DISTRIBUTION%/%DISTRIBUTION_VERSION%/%PING_COUNT%/%TOTAL_PING_COUNT%/%DAYS_SINCE_LAST_PING%/");
+pref("extensions.blocklist.url", "https://blocklists.settings.services.mozilla.com/v1/blocklist/3/%APP_ID%/%APP_VERSION%/");
 pref("extensions.blocklist.detailsURL", "https://blocked.cdn.mozilla.net/");
 pref("extensions.blocklist.itemURL", "https://blocked.cdn.mozilla.net/%blockID%.html");
 // Controls what level the blocklist switches from warning about items to forcibly
@@ -4747,7 +4749,7 @@ pref("webgl.perf.spew-frame-allocs", true);
 
 pref("webgl.enable-webgl2", true);
 
-pref("webgl.enable-debug-renderer-info", true);
+pref("webgl.enable-debug-renderer-info", false);
 pref("webgl.renderer-string-override", "");
 pref("webgl.vendor-string-override", "");
 
@@ -5854,11 +5856,7 @@ pref("dom.xhr.lowercase_header.enabled", false);
 
 // When a crash happens, whether to include heap regions of the crash context
 // in the minidump. Enabled by default on nightly and aurora.
-#ifdef RELEASE_OR_BETA
 pref("toolkit.crashreporter.include_context_heap", false);
-#else
-pref("toolkit.crashreporter.include_context_heap", true);
-#endif
 
 // Open noopener links in a new process
 pref("dom.noopener.newprocess.enabled", true);
