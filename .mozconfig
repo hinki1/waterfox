@@ -4,7 +4,7 @@
 if test `uname -s` = Linux; then
 export CC=clang
 export CXX=clang++
-ac_add_options --enable-optimize="-O2 -march=nocona -mtune=nocona -w"
+ac_add_options --enable-optimize="-O2 -mcpu=native -w"
 ac_add_options --enable-eme=widevine
 ac_add_options --target=x86_64-pc-linux-gnu
 ac_add_options --enable-pulseaudio
