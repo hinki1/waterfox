@@ -31,23 +31,26 @@ NS_INTERFACE_MAP_END
 NS_IMPL_ADDREF(IPCBlobInputStreamStorage)
 NS_IMPL_RELEASE(IPCBlobInputStreamStorage)
 
-IPCBlobInputStreamStorage::IPCBlobInputStreamStorage()
-{}
+IPCBlobInputStreamStorage::IPCBlobInputStreamStorage() {}
 
-IPCBlobInputStreamStorage::~IPCBlobInputStreamStorage()
-{}
+IPCBlobInputStreamStorage::~IPCBlobInputStreamStorage() {}
 
-/* static */ IPCBlobInputStreamStorage*
-IPCBlobInputStreamStorage::Get()
-{
-  return gStorage;
+/* static */
+Result<RefPtr<IPCBlobInputStreamStorage>, nsresult>
+IPCBlobInputStreamStorage::Get() {
+  mozilla::StaticMutexAutoLock lock(gMutex);
+  if (gStorage) {
+    RefPtr<IPCBlobInputStreamStorage> storage = gStorage;
+    return storage;
+  }
+
+  return Err(NS_ERROR_NOT_INITIALIZED);
 }
 
-/* static */ void
-IPCBlobInputStreamStorage::Initialize()
-{
+/* static */
+void IPCBlobInputStreamStorage::Initialize() {
+  mozilla::StaticMutexAutoLock lock(gMutex);
   MOZ_ASSERT(!gStorage);
-
   gStorage = new IPCBlobInputStreamStorage();
 
   nsCOMPtr<nsIObserverService> obs = mozilla::services::GetObserverService();
@@ -68,6 +71,7 @@ IPCBlobInputStreamStorage::Observe(nsISupports* aSubject, const char* aTopic,
       obs->RemoveObserver(this, "ipc:content-shutdown");
     }
 
+    mozilla::StaticMutexAutoLock lock(gMutex);
     gStorage = nullptr;
     return NS_OK;
   }
