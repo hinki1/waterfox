@@ -15,8 +15,7 @@ export MOZ_ENABLE_PROFILER_SPS=
 export MOZ_PROFILING=
 export MOZ_INCLUDE_SOURCE_INFO=1
 
-X=$(getconf NPROCESSORS_ONLN 2>/dev/null || getconf _NPROCESSORS_ONLN 2>/dev/null)
-mk_add_options MOZ_MAKE_FLAGS=-j${X%.*}
+mk_add_options MOZ_MAKE_FLAGS=-j1
 mk_add_options AUTOCLOBBER=1
 mk_add_options MOZ_OBJDIR=objdir-classic
 
