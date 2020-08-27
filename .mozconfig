@@ -46,4 +46,5 @@ ac_add_options --with-distribution-id=org.waterfoxproject
 # libnss3 3.27 required
 ac_add_options --with-system-nss
 # fails without system-nss
-ac_add_options --with-system-nspr
+# checking for NSPR - version >= 4.21.1
+#ac_add_options --with-system-nspr
