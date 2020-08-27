@@ -20,6 +20,7 @@ mk_add_options MOZ_MAKE_FLAGS=-j${X%.*}
 mk_add_options AUTOCLOBBER=1
 mk_add_options MOZ_OBJDIR=objdir-classic
 
+ac_add_options --disable-ccache
 ac_add_options --disable-crashreporter
 ac_add_options --disable-js-shell
 ac_add_options --disable-maintenance-service
@@ -31,7 +32,6 @@ ac_add_options --disable-verify-mar
 
 ac_add_options --enable-application=browser
 ac_add_options --enable-av1
-ac_add_options --enable-ccache
 ac_add_options --enable-eme=widevine
 ac_add_options --enable-release
 ac_add_options --enable-rust-simd # on x86 requires SSE2
