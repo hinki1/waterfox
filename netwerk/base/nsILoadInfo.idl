@@ -12,6 +12,7 @@ interface nsINode;
 interface nsIPrincipal;
 interface nsIRedirectHistoryEntry;
 interface nsIURI;
+native LoadContextRef(already_AddRefed<nsISupports>);
 %{C++
 #include "nsTArray.h"
 #include "mozilla/BasePrincipal.h"
@@ -333,6 +334,31 @@ interface nsILoadInfo : nsISupports
   nsINode binaryLoadingNode();
 
   /**
+   * A C++ friendly version of the loadingContext for toplevel loads.
+   * Most likely you want to query the ownerDocument or LoadingNode
+   * and not this context only available for TYPE_DOCUMENT loads.
+   * Please note that except for loads of TYPE_DOCUMENT, this
+   * ContextForTopLevelLoad will always return null.
+   */
+  [noscript, notxpcom, nostdcall, binaryname(ContextForTopLevelLoad)]
+  nsISupports binaryContextForTopLevelLoad();
+
+  /**
+   * For all loads except loads of TYPE_DOCUMENT, the loadingContext
+   * simply returns the loadingNode. For loads of TYPE_DOCUMENT this
+   * will return the context available for top-level loads which
+   * do not have a loadingNode.
+   */
+  [binaryname(LoadingContextXPCOM)]
+  readonly attribute nsISupports loadingContext;
+  
+  /**
+   * A C++ friendly version of the loadingContext.
+   */
+  [noscript, notxpcom, nostdcall, binaryname(GetLoadingContext)]
+  LoadContextRef binaryGetLoadingContext();
+
+  /**
    * The securityFlags of that channel.
    */
   readonly attribute nsSecurityFlags securityFlags;
@@ -498,15 +524,17 @@ interface nsILoadInfo : nsISupports
   /**
    * These are the window IDs of the window in which the element being
    * loaded lives. parentOuterWindowID is the window ID of this window's
-   * parent.
+   * parent. topOuterWindowID is the ID of the top-level window of the same
+   * docShell type.
    *
    * Note that these window IDs can be 0 if the window is not
-   * available. parentOuterWindowID will be the same as outerWindowID if the
-   * window has no parent.
+   * available. parentOuterWindowID and topOuterWindowID will be the same as
+   * outerWindowID if the window has no parent.
    */
   [infallible] readonly attribute unsigned long long innerWindowID;
   [infallible] readonly attribute unsigned long long outerWindowID;
   [infallible] readonly attribute unsigned long long parentOuterWindowID;
+  [infallible] readonly attribute unsigned long long topOuterWindowID;
 
   /**
    * Only when the element being loaded is <frame src="foo.html">
