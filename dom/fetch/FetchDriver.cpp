@@ -88,7 +88,7 @@ FetchDriver::~FetchDriver()
 }
 
 nsresult
-FetchDriver::Fetch(AbortSignal* aSignal, FetchDriverObserver* aObserver)
+FetchDriver::Fetch(AbortSignalImpl* aSignalImpl, FetchDriverObserver* aObserver)
 {
   workers::AssertIsOnMainThread();
 #ifdef DEBUG
@@ -117,13 +117,13 @@ FetchDriver::Fetch(AbortSignal* aSignal, FetchDriverObserver* aObserver)
 
   // If the signal is aborted, it's time to inform the observer and terminate
   // the operation.
-  if (aSignal) {
-    if (aSignal->Aborted()) {
+  if (aSignalImpl) {
+    if (aSignalImpl->Aborted()) {
       Abort();
       return NS_OK;
     }
 
-    Follow(aSignal);
+    Follow(aSignalImpl);
   }
 
   if (NS_FAILED(HttpFetch())) {
@@ -528,7 +528,8 @@ FetchDriver::OnStartRequest(nsIRequest* aRequest,
     rv = httpChannel->GetResponseStatusText(statusText);
     MOZ_ASSERT(NS_SUCCEEDED(rv));
 
-    response = new InternalResponse(responseStatus, statusText);
+    response = new InternalResponse(responseStatus, statusText,
+                                    mRequest->GetCredentialsMode());
 
     response->Headers()->FillResponseHeaders(httpChannel);
 
@@ -543,7 +544,8 @@ FetchDriver::OnStartRequest(nsIRequest* aRequest,
     }
     MOZ_ASSERT(!result.Failed());
   } else {
-    response = new InternalResponse(200, NS_LITERAL_CSTRING("OK"));
+    response = new InternalResponse(200, NS_LITERAL_CSTRING("OK"),
+                                    mRequest->GetCredentialsMode());
 
     ErrorResult result;
     nsAutoCString contentType;
