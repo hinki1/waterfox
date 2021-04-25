@@ -189,11 +189,7 @@ pref("dom.permissions.revoke.enable", false);
 pref("dom.performance.time_to_non_blank_paint.enabled", false);
 
 // Enable Performance Observer API
-#ifdef NIGHTLY_BUILD
 pref("dom.enable_performance_observer", true);
-#else
-pref("dom.enable_performance_observer", false);
-#endif
 
 // Enable requestIdleCallback API
 pref("dom.requestIdleCallback.enabled", true);
@@ -2883,6 +2879,16 @@ pref("layout.css.isolation.enabled", true);
 
 // Is support for CSS Filters enabled?
 pref("layout.css.filters.enabled", true);
+
+// Is support for scrollbar-color property enabled?
+#ifndef XP_MACOSX
+pref("layout.css.scrollbar-color.enabled", true);
+#else
+pref("layout.css.scrollbar-color.enabled", false);
+#endif
+
+// Is support for scrollbar-width property enabled?
+pref("layout.css.scrollbar-width.enabled", true);
 
 // Set the threshold distance in CSS pixels below which scrolling will snap to
 // an edge, when scroll snapping is set to "proximity".

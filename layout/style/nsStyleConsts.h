@@ -144,6 +144,13 @@ enum class StyleHyphens : uint8_t {
   Auto,
 };
 
+// scrollbar-width
+enum class StyleScrollbarWidth : uint8_t {
+  Auto,
+  Thin,
+  None,
+};
+
 // <shape-radius> for <basic-shape>
 enum class StyleShapeRadius : uint8_t {
   ClosestSide,
@@ -1267,6 +1274,10 @@ enum class StyleWhiteSpace : uint8_t {
 #define NS_STYLE_DISPLAY_MODE_MINIMAL_UI        1
 #define NS_STYLE_DISPLAY_MODE_STANDALONE        2
 #define NS_STYLE_DISPLAY_MODE_FULLSCREEN        3
+
+// prefers-color-scheme
+#define NS_STYLE_PREFERS_COLOR_SCHEME_LIGHT	0
+#define NS_STYLE_PREFERS_COLOR_SCHEME_DARK	1
 
 } // namespace mozilla
 
