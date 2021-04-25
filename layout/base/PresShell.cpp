@@ -1028,6 +1028,7 @@ PresShell::Init(nsIDocument* aDocument,
 #endif
       os->AddObserver(this, "memory-pressure", false);
       os->AddObserver(this, NS_WIDGET_WAKE_OBSERVER_TOPIC, false);
+      os->AddObserver(this, "look-and-feel-pref-changed", false);
     }
   }
 
@@ -1256,6 +1257,7 @@ PresShell::Destroy()
 #endif
       os->RemoveObserver(this, "memory-pressure");
       os->RemoveObserver(this, NS_WIDGET_WAKE_OBSERVER_TOPIC);
+      os->RemoveObserver(this, "look-and-feel-pref-changed");
     }
   }
 
@@ -3398,7 +3400,7 @@ static void ScrollToShowRect(nsIScrollableFrame*      aFrameAsScrollable,
       aHorizontal.mWhenToScroll == nsIPresShell::SCROLL_IF_NOT_VISIBLE) {
     lineSize = aFrameAsScrollable->GetLineScrollAmount();
   }
-  ScrollbarStyles ss = aFrameAsScrollable->GetScrollbarStyles();
+  ScrollStyles ss = aFrameAsScrollable->GetScrollStyles();
   nsRect allowedRange(scrollPt, nsSize(0, 0));
   bool needToScroll = false;
   uint32_t directions = aFrameAsScrollable->GetPerceivedScrollingDirections();
@@ -3455,7 +3457,7 @@ static void ScrollToShowRect(nsIScrollableFrame*      aFrameAsScrollable,
   // a current smooth scroll operation.
   if (needToScroll) {
     nsIScrollableFrame::ScrollMode scrollMode = nsIScrollableFrame::INSTANT;
-    bool autoBehaviorIsSmooth = (aFrameAsScrollable->GetScrollbarStyles().mScrollBehavior
+    bool autoBehaviorIsSmooth = (aFrameAsScrollable->GetScrollStyles().mScrollBehavior
                                   == NS_STYLE_SCROLL_BEHAVIOR_SMOOTH);
     bool smoothScroll = (aFlags & nsIPresShell::SCROLL_SMOOTH) ||
                           ((aFlags & nsIPresShell::SCROLL_SMOOTH_AUTO) && autoBehaviorIsSmooth);
@@ -9723,6 +9725,11 @@ PresShell::Observe(nsISupports* aSubject,
 
   if (!nsCRT::strcmp(aTopic, NS_WIDGET_WAKE_OBSERVER_TOPIC)) {
     mLastOSWake = TimeStamp::Now();
+  }
+
+  if (!nsCRT::strcmp(aTopic, "look-and-feel-pref-changed")) {
+    ThemeChanged();
+    return NS_OK;
   }
 
   NS_WARNING("unrecognized topic in PresShell::Observe");
