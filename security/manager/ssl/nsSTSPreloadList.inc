@@ -10,7 +10,5 @@
 #include <stdint.h>
 const PRTime gPreloadListExpirationTime = INT64_C(1632739117778000);
 %%
-<<<<<<< HEAD
 00220022.net, 1
->>>>>>> hinki/upstream
 %%
