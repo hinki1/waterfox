@@ -1,0 +1,22 @@
+#!/usr/bin/make -f
+
+# Uncomment this to turn on verbose mode.
+export DH_VERBOSE=1
+
+%:
+	dh $@
+
+# breaks mach.
+override_dh_auto_configure:
+
+# just for first build testing
+#override_dh_auto_test:
+
+#override_dh_build:
+#	./mach build
+
+# so etwas, siehe auch waterfox-deb/Makefile
+override_dh_install:
+	mkdir -p debian/tmp/waterfox
+	cp -rL objdir-classic/dist/bin debian/tmp/waterfox
+	dh_install

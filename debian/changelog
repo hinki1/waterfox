@@ -1,0 +1,96 @@
+waterfox (2021.07+2) buster; urgency=medium
+
+  * new upstream version 2021.07-classic
+  * build clean upstream version
+
+ -- Matthias Hinkfoth <hinki@abwesend.de>  Sun, 18 Jul 2021 23:10:23 +0200
+
+waterfox (2021.06+1) buster; urgency=medium
+
+  * new upstream version 2021.06-classic
+
+ -- Matthias Hinkfoth <hinki@abwesend.de>  Mon, 07 Jun 2021 22:51:31 +0200
+
+waterfox (2021.04.2+1) buster; urgency=medium
+
+  * new upstream version 2021.04.2
+
+ -- Matthias Hinkfoth <hinki@abwesend.de>  Wed, 28 Apr 2021 17:50:46 +0200
+
+waterfox (2021.04+1) buster; urgency=medium
+
+  * new upstream version 2021.04
+
+ -- Matthias Hinkfoth <hinki@abwesend.de>  Sun, 25 Apr 2021 21:19:46 +0200
+
+waterfox (2021.03+1) buster; urgency=medium
+
+  * new upstream version 2021.03-classic
+
+ -- Matthias Hinkfoth <hinki@abwesend.de>  Wed, 31 Mar 2021 23:44:11 +0200
+
+waterfox (2021.02+1) buster; urgency=medium
+
+  * new upstream version 2021.02-classic
+
+ -- Matthias Hinkfoth <hinki@abwesend.de>  Wed, 17 Feb 2021 21:53:57 +0100
+
+waterfox (2021.01+1) buster; urgency=medium
+
+  * new upstream version 2021.01-classic
+
+ -- Matthias Hinkfoth <hinki@abwesend.de>  Wed, 27 Jan 2021 22:26:11 +0100
+
+waterfox (2020.12+1) buster; urgency=medium
+
+  * new upstream version 2020.12-classic
+
+ -- Matthias Hinkfoth <hinki@abwesend.de>  Wed, 09 Dec 2020 21:19:37 +0100
+
+waterfox (2020.10+1) buster; urgency=medium
+
+  * new upstream version 2020.10-classic
+
+ -- Matthias Hinkfoth <hinki@abwesend.de>  Thu, 22 Oct 2020 09:31:44 +0200
+
+waterfox (2020.09+1) buster; urgency=medium
+
+  * new upstream version 2020.09-classic
+
+ -- Matthias Hinkfoth <hinki@abwesend.de>  Thu, 24 Sep 2020 11:18:30 +0200
+
+waterfox (2020.08.1+1) buster; urgency=medium
+
+  * new upstream version 2020.08.1-classic
+
+ -- Matthias Hinkfoth <hinki@abwesend.de>  Thu, 27 Aug 2020 06:49:04 +0200
+
+waterfox (2020.07.1+2) buster; urgency=medium
+
+  * fix duckduckgo
+
+ -- Matthias Hinkfoth <hinki@abwesend.de>  Wed, 05 Aug 2020 08:29:42 +0200
+
+waterfox (2020.07.1+1) buster; urgency=medium
+
+  * new upstream version 2020.07.1-classic
+
+ -- Matthias Hinkfoth <hinki@abwesend.de>  Mon, 03 Aug 2020 21:30:18 +0200
+
+waterfox (2020.07+1) buster; urgency=medium
+
+  * new upstream version 2020.07-classic
+
+ -- Matthias Hinkfoth <hinki@abwesend.de>  Thu, 16 Jul 2020 15:11:19 +0200
+
+waterfox (2020.06+1) buster; urgency=medium
+
+  * new upstream version 2020.06-classic
+
+ -- Matthias Hinkfoth <hinki@abwesend.de>  Wed, 10 Jun 2020 22:50:49 +0200
+
+waterfox (2020.05+1) buster; urgency=high
+
+  * build for debian stable
+
+ -- Matthias Hinkfoth <hinki@abwesend.de>  Sat, 09 May 2020 14:23:09 +0200

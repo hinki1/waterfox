@@ -1,0 +1,9 @@
+# ?
+/.debhelper/
+/files
+/waterfox.postrm.debhelper
+/waterfox.substvars
+# build dir?
+/tmp/waterfox/bin/
+# chroot, install dir
+/waterfox/
