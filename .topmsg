@@ -1,0 +1,4 @@
+From: Matthias Hinkfoth <hinki@abwesend.de>
+Subject: remove the firefox sync feature
+
+syncedtabs depend on it.
