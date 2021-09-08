@@ -122,9 +122,7 @@ enum class ImageBitmapFormat : uint8_t;
 class IdleRequest;
 class IdleRequestCallback;
 class IncrementalRunnable;
-#ifdef ENABLE_INTL_API
 class IntlUtils;
-#endif
 class Location;
 class MediaQueryList;
 class MozSelfSupport;
@@ -964,10 +962,8 @@ public:
   void
   GetRegionalPrefsLocales(nsTArray<nsString>& aLocales);
 
-#ifdef ENABLE_INTL_API
   mozilla::dom::IntlUtils*
   GetIntlUtils(mozilla::ErrorResult& aRv);
-#endif
 
 protected:
   bool AlertOrConfirm(bool aAlert, const nsAString& aMessage,
@@ -1260,15 +1256,6 @@ public:
                     const mozilla::dom::ImageBitmapSource& aImage,
                     int32_t aSx, int32_t aSy, int32_t aSw, int32_t aSh,
                     mozilla::ErrorResult& aRv);
-
-  already_AddRefed<mozilla::dom::Promise>
-  CreateImageBitmap(JSContext* aCx,
-                    const mozilla::dom::ImageBitmapSource& aImage,
-                    int32_t aOffset, int32_t aLength,
-                    mozilla::dom::ImageBitmapFormat aFormat,
-                    const mozilla::dom::Sequence<mozilla::dom::ChannelPixelLayout>& aLayout,
-                    mozilla::ErrorResult& aRv);
-
 
   // ChromeWindow bits.  Do NOT call these unless your window is in
   // fact an nsGlobalChromeWindow.
@@ -2044,9 +2031,7 @@ protected:
   uint32_t mAutoActivateVRDisplayID; // Outer windows only
   int64_t mBeforeUnloadListenerCount; // Inner windows only
 
-#ifdef ENABLE_INTL_API
   RefPtr<mozilla::dom::IntlUtils> mIntlUtils;
-#endif
 
   friend class nsDOMScriptableHelper;
   friend class nsDOMWindowUtils;

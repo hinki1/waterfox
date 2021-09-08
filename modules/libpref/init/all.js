@@ -24,6 +24,8 @@ pref("preferences.allow.omt-write", false);
 pref("keyword.enabled", false);
 pref("general.useragent.locale", "chrome://global/locale/intl.properties");
 pref("general.useragent.compatMode.firefox", true);
+pref("general.useragent.compatMode.version", "68.0");
+pref("general.useragent.appVersionIsLong", true);
 
 pref("general.useragent.updates.enabled", true);
 pref("general.useragent.updates.url", "");
@@ -943,9 +945,6 @@ pref("canvas.filters.enabled", true);
 // Add support for canvas path objects
 pref("canvas.path.enabled", true);
 pref("canvas.capturestream.enabled", true);
-
-// Disable the ImageBitmap-extensions for now.
-pref("canvas.imagebitmap_extensions.enabled", false);
 
 // We want the ability to forcibly disable platform a11y, because
 // some non-a11y-related components attempt to bring it up.  See bug
@@ -2294,16 +2293,7 @@ pref("intl.ime.hack.on_ime_unaware_apps.fire_key_events_for_composition", false)
 // ideographic space will be ignored (i.e., commits with empty string).
 pref("intl.ime.remove_placeholder_character_at_commit", false);
 
-#ifdef ENABLE_INTL_API
 pref("intl.uidirection", -1); // -1 to set from locale; 0 for LTR; 1 for RTL
-#else
-// these locales have right-to-left UI
-pref("intl.uidirection.ar", "rtl");
-pref("intl.uidirection.he", "rtl");
-pref("intl.uidirection.fa", "rtl");
-pref("intl.uidirection.ug", "rtl");
-pref("intl.uidirection.ur", "rtl");
-#endif
 
 // use en-US hyphenation by default for content tagged with plain lang="en"
 pref("intl.hyphenation-alias.en", "en-us");
