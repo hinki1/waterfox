@@ -183,7 +183,7 @@ LIRGenerator::visitTableSwitch(MTableSwitch* tableswitch)
 void
 LIRGenerator::visitCheckOverRecursed(MCheckOverRecursed* ins)
 {
-    LCheckOverRecursed* lir = new(alloc()) LCheckOverRecursed(temp());
+    LCheckOverRecursed* lir = new(alloc()) LCheckOverRecursed();
     add(lir, ins);
     assignSafepoint(lir, ins);
 }
@@ -2002,6 +2002,16 @@ LIRGenerator::visitFromCodePoint(MFromCodePoint* ins)
 }
 
 void
+LIRGenerator::visitStringConvertCase(MStringConvertCase* ins)
+{
+    MOZ_ASSERT(ins->string()->type() == MIRType::String);
+
+    auto* lir = new(alloc()) LStringConvertCase(useRegisterAtStart(ins->string()));
+    defineReturn(lir, ins);
+    assignSafepoint(lir, ins);
+}
+
+void
 LIRGenerator::visitStart(MStart* start)
 {
     LStart* lir = new(alloc()) LStart;
@@ -2672,7 +2682,7 @@ LIRGenerator::visitFunctionEnvironment(MFunctionEnvironment* ins)
 void
 LIRGenerator::visitInterruptCheck(MInterruptCheck* ins)
 {
-    LInstruction* lir = new(alloc()) LInterruptCheck(temp());
+    LInstruction* lir = new(alloc()) LInterruptCheck();
     add(lir, ins);
     assignSafepoint(lir, ins);
 }

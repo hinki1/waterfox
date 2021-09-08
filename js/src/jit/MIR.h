@@ -4055,7 +4055,7 @@ class MInitElemGetterSetter
 };
 
 // WrappedFunction wraps a JSFunction so it can safely be used off-thread.
-// In particular, a function's flags can be modified on the active thread as
+// In particular, a function's flags can be modified on the main thread as
 // functions are relazified and delazified, so we must be careful not to access
 // these flags off-thread.
 class WrappedFunction : public TempObject
@@ -7456,6 +7456,42 @@ class MFromCodePoint
     ALLOW_CLONE(MFromCodePoint)
 };
 
+class MStringConvertCase
+  : public MUnaryInstruction,
+    public StringPolicy<0>::Data
+{
+  public:
+    enum Mode { LowerCase, UpperCase };
+
+  private:
+    Mode mode_;
+
+    MStringConvertCase(MDefinition* string, Mode mode)
+      : MUnaryInstruction(string), mode_(mode)
+    {
+        setResultType(MIRType::String);
+        setMovable();
+    }
+
+  public:
+    INSTRUCTION_HEADER(StringConvertCase)
+    TRIVIAL_NEW_WRAPPERS
+    NAMED_OPERANDS((0, string))
+
+    bool congruentTo(const MDefinition* ins) const override {
+        return congruentIfOperandsEqual(ins) && ins->toStringConvertCase()->mode() == mode();
+    }
+    AliasSet getAliasSet() const override {
+        return AliasSet::None();
+    }
+    bool possiblyCalls() const override {
+        return true;
+    }
+    Mode mode() const {
+        return mode_;
+    }
+};
+
 class MSinCos
   : public MUnaryInstruction,
     public FloatingPointPolicy<0>::Data
@@ -8504,7 +8540,7 @@ struct LambdaFunctionInfo
 {
     // The functions used in lambdas are the canonical original function in
     // the script, and are immutable except for delazification. Record this
-    // information while still on the active thread to avoid races.
+    // information while still on the main thread to avoid races.
     CompilerFunction fun;
     uint16_t flags;
     uint16_t nargs;
