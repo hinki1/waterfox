@@ -39,6 +39,7 @@
 
 #include "builtin/DataViewObject.h"
 #include "gc/Barrier.h"
+#include "gc/FreeOp.h"
 #include "gc/Marking.h"
 #include "gc/Memory.h"
 #include "js/Conversions.h"
@@ -1492,7 +1493,7 @@ ArrayBufferViewObject::trace(JSTracer* trc, JSObject* objArg)
                 // not be enough bytes available, and other views might have data
                 // pointers whose forwarding pointers would overlap this one.
                 if (trc->isTenuringTracer()) {
-                    Nursery& nursery = obj->zoneFromAnyThread()->group()->nursery();
+                    Nursery& nursery = trc->runtime()->gc.nursery();
                     nursery.maybeSetForwardingPointer(trc, srcData, dstData, /* direct = */ false);
                 }
             } else {

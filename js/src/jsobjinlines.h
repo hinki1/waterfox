@@ -17,6 +17,7 @@
 #include "builtin/MapObject.h"
 #include "builtin/TypedObject.h"
 #include "gc/Allocator.h"
+#include "gc/FreeOp.h"
 #include "vm/ArrayObject.h"
 #include "vm/DateObject.h"
 #include "vm/EnvironmentObject.h"
@@ -83,7 +84,7 @@ JSObject::finalize(js::FreeOp* fop)
 #ifdef DEBUG
     MOZ_ASSERT(isTenured());
     if (!IsBackgroundFinalized(asTenured().getAllocKind())) {
-        /* Assert we're on the active thread. */
+        /* Assert we're on the main thread. */
         MOZ_ASSERT(CurrentThreadCanAccessZone(zone()));
     }
 #endif
