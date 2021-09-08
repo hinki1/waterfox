@@ -231,9 +231,7 @@
 #include "mozilla/dom/Fetch.h"
 #include "mozilla/dom/FunctionBinding.h"
 #include "mozilla/dom/HashChangeEvent.h"
-#ifdef ENABLE_INTL_API
 #include "mozilla/dom/IntlUtils.h"
-#endif
 #include "mozilla/dom/MozSelfSupportBinding.h"
 #include "mozilla/dom/PopStateEvent.h"
 #include "mozilla/dom/PopupBlockedEvent.h"
@@ -2054,9 +2052,7 @@ nsGlobalWindow::CleanUp()
 
   mServiceWorkerRegistrationTable.Clear();
 
-#ifdef ENABLE_INTL_API
   mIntlUtils = nullptr;
-#endif
 }
 
 void
@@ -2355,9 +2351,7 @@ NS_IMPL_CYCLE_COLLECTION_TRAVERSE_BEGIN_INTERNAL(nsGlobalWindow)
   NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mPaintWorklet)
   NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mExternal)
   NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mMozSelfSupport)
-#ifdef ENABLE_INTL_API
   NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mIntlUtils)
-#endif
 
   tmp->TraverseHostObjectURIs(cb);
 NS_IMPL_CYCLE_COLLECTION_TRAVERSE_END
@@ -2434,9 +2428,7 @@ NS_IMPL_CYCLE_COLLECTION_UNLINK_BEGIN(nsGlobalWindow)
   NS_IMPL_CYCLE_COLLECTION_UNLINK(mPaintWorklet)
   NS_IMPL_CYCLE_COLLECTION_UNLINK(mExternal)
   NS_IMPL_CYCLE_COLLECTION_UNLINK(mMozSelfSupport)
-#ifdef ENABLE_INTL_API
   NS_IMPL_CYCLE_COLLECTION_UNLINK(mIntlUtils)
-#endif
 
   tmp->UnlinkHostObjectURIs();
 
@@ -2872,36 +2864,19 @@ nsGlobalWindow::ComputeIsSecureContext(nsIDocument* aDocument, SecureContextFlag
 }
 
 static JS::CompartmentCreationOptions&
-SelectZoneGroup(nsGlobalWindow* aNewInner,
-                JS::CompartmentCreationOptions& aOptions)
+SelectZone(nsGlobalWindow* aNewInner,
+           JS::CompartmentCreationOptions& aOptions)
 {
-  JS::CompartmentCreationOptions options;
-
   if (aNewInner->GetOuterWindow()) {
     nsGlobalWindow *top = aNewInner->GetTopInternal();
 
-    // If we have a top-level window, use its zone (and zone group).
+    // If we have a top-level window, use its zone.
     if (top && top->GetGlobalJSObject()) {
       return aOptions.setExistingZone(top->GetGlobalJSObject());
     }
   }
 
-  // If we're in the parent process, don't bother with zone groups.
-  if (XRE_IsParentProcess()) {
-    return aOptions.setNewZoneInSystemZoneGroup();
-  }
-
-  // Otherwise, find a zone group from the TabGroup. Typically we only have to
-  // go through one iteration of this loop.
-  RefPtr<TabGroup> tabGroup = aNewInner->TabGroup();
-  for (nsPIDOMWindowOuter* outer : tabGroup->GetWindows()) {
-    nsGlobalWindow* window = nsGlobalWindow::Cast(outer);
-    if (JSObject* global = window->GetGlobalJSObject()) {
-      return aOptions.setNewZoneInExistingZoneGroup(global);
-    }
-  }
-
-  return aOptions.setNewZoneInNewZoneGroup();
+  return aOptions.setNewZone();
 }
 
 /**
@@ -2929,7 +2904,7 @@ CreateNativeGlobalForInner(JSContext* aCx,
 
   JS::CompartmentOptions options;
 
-  SelectZoneGroup(aNewInner, options.creationOptions());
+  SelectZone(aNewInner, options.creationOptions());
 
   // Sometimes add-ons load their own XUL windows, either as separate top-level
   // windows or inside a browser element. In such cases we want to tag the
@@ -14860,11 +14835,6 @@ nsGlobalWindow::CreateImageBitmap(JSContext* aCx,
                                   const ImageBitmapSource& aImage,
                                   ErrorResult& aRv)
 {
-  if (aImage.IsArrayBuffer() || aImage.IsArrayBufferView()) {
-    aRv.Throw(NS_ERROR_NOT_IMPLEMENTED);
-    return nullptr;
-  }
-
   return ImageBitmap::Create(this, aImage, Nothing(), aRv);
 }
 
@@ -14874,32 +14844,7 @@ nsGlobalWindow::CreateImageBitmap(JSContext* aCx,
                                   int32_t aSx, int32_t aSy, int32_t aSw, int32_t aSh,
                                   ErrorResult& aRv)
 {
-  if (aImage.IsArrayBuffer() || aImage.IsArrayBufferView()) {
-    aRv.Throw(NS_ERROR_NOT_IMPLEMENTED);
-    return nullptr;
-  }
-
   return ImageBitmap::Create(this, aImage, Some(gfx::IntRect(aSx, aSy, aSw, aSh)), aRv);
-}
-
-already_AddRefed<mozilla::dom::Promise>
-nsGlobalWindow::CreateImageBitmap(JSContext* aCx,
-                                  const ImageBitmapSource& aImage,
-                                  int32_t aOffset, int32_t aLength,
-                                  ImageBitmapFormat aFormat,
-                                  const Sequence<ChannelPixelLayout>& aLayout,
-                                  ErrorResult& aRv)
-{
-  if (!ImageBitmap::ExtensionsEnabled(aCx)) {
-    aRv.Throw(NS_ERROR_TYPE_ERR);
-    return nullptr;
-  }
-  if (aImage.IsArrayBuffer() || aImage.IsArrayBufferView()) {
-    return ImageBitmap::Create(this, aImage, aOffset, aLength, aFormat, aLayout,
-                               aRv);
-  }
-  aRv.Throw(NS_ERROR_TYPE_ERR);
-  return nullptr;
 }
 
 // Helper called by methods that move/resize the window,
@@ -15142,7 +15087,6 @@ nsGlobalWindow::GetRegionalPrefsLocales(nsTArray<nsString>& aLocales)
   }
 }
 
-#ifdef ENABLE_INTL_API
 IntlUtils*
 nsGlobalWindow::GetIntlUtils(ErrorResult& aError)
 {
@@ -15154,7 +15098,6 @@ nsGlobalWindow::GetIntlUtils(ErrorResult& aError)
 
   return mIntlUtils;
 }
-#endif
 
 template class nsPIDOMWindow<mozIDOMWindowProxy>;
 template class nsPIDOMWindow<mozIDOMWindow>;
