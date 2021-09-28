@@ -1,6 +1,5 @@
 # One config to rule them all
 
-<<<<<<< HEAD
 # Linux Specific Options
 if test `uname -s` = Linux; then
 	if test -d "$HOME/.mozbuild/clang/bin"; then
