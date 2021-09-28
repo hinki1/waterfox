@@ -6,7 +6,7 @@ Build-Depends:
  debhelper (>= 9),
  llvm, clang,
  autoconf2.13,
- python,
+ python3,
 # cargo,
  rustc (>= 1.26.0), libstd-rust-dev,
  pkg-config,
@@ -35,8 +35,10 @@ Build-Depends:
  iso-codes,
  libcom-err2,
  libstdc++6,
+# brauche ich die?
 # ca-certificates,
- libdbus-glib-1-dev,
+# das ist oll
+# libdbus-glib-1-dev,
 # xml-core,
 Standards-Version: 3.9.7
 Homepage: https://www.waterfoxproject.org/
