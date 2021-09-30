@@ -1,6 +1,12 @@
+waterfox (2021.09+2) buster; urgency=medium
+
+  * new upstream version 2020.09-classic
+
+ -- Matthias Hinkfoth <hinki@abwesend.de>  Thu, 30 Sep 2021 07:16:33 +0200
+
 waterfox (2021.08.1+2) buster; urgency=medium
 
-  * new upstream version 2021.08.1-classig
+  * new upstream version 2021.08.1-classic
 
  -- Matthias Hinkfoth <hinki@abwesend.de>  Wed, 08 Sep 2021 21:29:16 +0200
 
