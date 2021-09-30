@@ -1,5 +1,8 @@
 # ?
 /.debhelper/
+/debhelper-build-stamp
+/autoreconf.after
+/autoreconf.before
 /files
 /waterfox.postrm.debhelper
 /waterfox.substvars
