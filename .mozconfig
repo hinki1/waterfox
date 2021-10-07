@@ -13,20 +13,12 @@ if test `uname -s` = Linux; then
 	ac_add_options --target=x86_64-pc-linux-gnu
 	ac_add_options --enable-pulseaudio
 	ac_add_options --enable-alsa
-	#export NASM=/usr/lib/nasm-mozilla/bin/nasm
 fi
-
-export MOZ_GECKO_PROFILER=
-export MOZ_ENABLE_PROFILER_SPS=
-export MOZ_PROFILING=
-export MOZ_INCLUDE_SOURCE_INFO=1
 
 X=$(getconf NPROCESSORS_ONLN 2>/dev/null || getconf _NPROCESSORS_ONLN 2>/dev/null)
 mk_add_options MOZ_MAKE_FLAGS=-j${X%.*}
-mk_add_options AUTOCLOBBER=1
-mk_add_options MOZ_OBJDIR=objdir-classic
 
-ac_add_options --disable-ccache
+#ac_add_options --disable-ccache
 ac_add_options --disable-crashreporter
 ac_add_options --disable-js-shell
 ac_add_options --disable-maintenance-service
@@ -36,12 +28,15 @@ ac_add_options --disable-stylo
 ac_add_options --disable-tests
 ac_add_options --disable-verify-mar
 
-ac_add_options --enable-application=browser
 if [ -x "$(command -v sccache)" ]; then
 	ac_add_options --with-ccache=sccache
+elif [ -x "$(command -v ccache)" ]; then
+    ac_add_options --with-ccache=ccache
 elif [ -f "$HOME/.mozbuild/sccache/sccache" ]; then
 	ac_add_options --with-ccache=$HOME/.mozbuild/sccache/sccache
 fi
+
+ac_add_options --enable-application=browser
 ac_add_options --enable-eme=widevine
 ac_add_options --enable-release
 ac_add_options --enable-rust-simd # on x86 requires SSE2
@@ -58,3 +53,11 @@ ac_add_options --with-distribution-id=org.waterfoxproject
 # fails without system-nss
 # checking for NSPR - version >= 4.21.1
 #ac_add_options --with-system-nspr
+
+mk_add_options AUTOCLOBBER=1
+mk_add_options MOZ_OBJDIR=objdir-classic
+
+export MOZ_GECKO_PROFILER=
+export MOZ_ENABLE_PROFILER_SPS=
+export MOZ_PROFILING=
+export MOZ_INCLUDE_SOURCE_INFO=1
