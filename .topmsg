@@ -3,3 +3,6 @@ Subject: remove the firefox sync feature
 
 syncedtabs depend on it.
 remove ./services/sync
+
+TODO:
+about:preferences still contains a "Sync"-Field. It does nothing.
