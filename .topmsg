@@ -1,0 +1,8 @@
+From: Matthias Hinkfoth <hinki@abwesend.de>
+Subject: try to make vimperator 3.16 work
+
+maybe the ff56-fixes branch of vimperator helps.
+issues:
+https://github.com/WaterfoxCo/Waterfox/issues/428
+https://github.com/vimperator/vimperator-labs/issues/796
+- TypeError: this._identityPopupContentHosts is undefined
