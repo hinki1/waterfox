@@ -2751,8 +2751,6 @@ public:
     CreateAttributeNS(const nsAString& aNamespaceURI,
                       const nsAString& aQualifiedName,
                       mozilla::ErrorResult& rv);
-  void SetAllowUnsafeHTML(bool aAllow) { mAllowUnsafeHTML = aAllow; }
-  bool AllowUnsafeHTML() const;
   void GetInputEncoding(nsAString& aInputEncoding) const;
   already_AddRefed<mozilla::dom::Location> GetLocation() const;
   void GetReferrer(nsAString& aReferrer) const;
@@ -3367,10 +3365,6 @@ protected:
   // True if any CSP violation reports for this doucment will be buffered in
   // mBufferedCSPViolations instead of being sent immediately.
   bool mBufferingCSPViolations : 1;
-
-  // True if unsafe HTML fragments should be allowed in chrome-privileged
-  // documents.
-  bool mAllowUnsafeHTML : 1;
 
   // True if dom.webcomponents.enabled pref is set when document is created.
   bool mIsWebComponentsEnabled : 1;
