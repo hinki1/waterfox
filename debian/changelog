@@ -1,3 +1,9 @@
+waterfox (2021.10+3) buster; urgency=medium
+
+  * try to support vimperator again
+
+ -- Matthias Hinkfoth <hinki@abwesend.de>  Tue, 12 Oct 2021 21:10:54 +0200
+
 waterfox (2021.10+2) buster; urgency=medium
 
   * new upstream version 2020.10-classic

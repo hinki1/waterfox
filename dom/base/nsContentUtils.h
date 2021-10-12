@@ -1517,11 +1517,6 @@ public:
   static bool IsValidNodeName(nsIAtom *aLocalName, nsIAtom *aPrefix,
                                 int32_t aNamespaceID);
 
-  enum SanitizeFragments {
-    SanitizeSystemPrivileged,
-    NeverSanitize,
-  };
-
   /**
    * Creates a DocumentFragment from text using a context node to resolve
    * namespaces.
@@ -1535,8 +1530,6 @@ public:
    * @param aFragment the string which is parsed to a DocumentFragment
    * @param aReturn the resulting fragment
    * @param aPreventScriptExecution whether to mark scripts as already started
-   * @param aSanitize whether the fragment should be sanitized prior to
-   *        injection
    */
   static nsresult CreateContextualFragment(nsINode* aContextNode,
                                            const nsAString& aFragment,
@@ -1545,16 +1538,7 @@ public:
   static already_AddRefed<mozilla::dom::DocumentFragment>
   CreateContextualFragment(nsINode* aContextNode, const nsAString& aFragment,
                            bool aPreventScriptExecution,
-                           SanitizeFragments aSanitize,
                            mozilla::ErrorResult& aRv);
-  static already_AddRefed<mozilla::dom::DocumentFragment>
-  CreateContextualFragment(nsINode* aContextNode, const nsAString& aFragment,
-                           bool aPreventScriptExecution,
-                           mozilla::ErrorResult& aRv)
-  {
-    return CreateContextualFragment(aContextNode, aFragment, aPreventScriptExecution,
-                                    SanitizeSystemPrivileged, aRv);
-  }
 
   /**
    * Invoke the fragment parsing algorithm (innerHTML) using the HTML parser.
@@ -1567,8 +1551,6 @@ public:
    * @param aPreventScriptExecution true to prevent scripts from executing;
    *        don't set to false when parsing into a target node that has been
    *        bound to tree.
-   * @param aSanitize whether the fragment should be sanitized prior to
-   *        injection
    * @return NS_ERROR_DOM_INVALID_STATE_ERR if a re-entrant attempt to parse
    *         fragments is made, NS_ERROR_OUT_OF_MEMORY if aSourceBuffer is too
    *         long and NS_OK otherwise.
@@ -1578,8 +1560,7 @@ public:
                                     nsIAtom* aContextLocalName,
                                     int32_t aContextNamespace,
                                     bool aQuirks,
-                                    bool aPreventScriptExecution,
-                                    SanitizeFragments aSanitize = SanitizeSystemPrivileged);
+                                    bool aPreventScriptExecution);
 
   /**
    * Invoke the fragment parsing algorithm (innerHTML) using the XML parser.
@@ -1589,8 +1570,6 @@ public:
    * @param aTagStack the namespace mapping context
    * @param aPreventExecution whether to mark scripts as already started
    * @param aReturn the result fragment
-   * @param aSanitize whether the fragment should be sanitized prior to
-   *        injection
    * @return NS_ERROR_DOM_INVALID_STATE_ERR if a re-entrant attempt to parse
    *         fragments is made, a return code from the XML parser.
    */
@@ -1598,8 +1577,7 @@ public:
                                    nsIDocument* aDocument,
                                    nsTArray<nsString>& aTagStack,
                                    bool aPreventScriptExecution,
-                                   nsIDOMDocumentFragment** aReturn,
-                                   SanitizeFragments aSanitize = SanitizeSystemPrivileged);
+                                   nsIDOMDocumentFragment** aReturn);
 
   /**
    * Parse a string into a document using the HTML parser.
