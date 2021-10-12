@@ -34,23 +34,11 @@ var gEMEHandler = {
     }
     return true;
   },
-  getEMEDisabledFragment(msgId) {
-    let mainMessage = gNavigatorBundle.getString("emeNotifications.drmContentDisabled.message");
-    let [prefix, suffix] = mainMessage.split(/%(?:1\$)?S/).map(s => document.createTextNode(s));
-    let text = gNavigatorBundle.getString("emeNotifications.drmContentDisabled.learnMoreLabel");
+  getLearnMoreLink(msgId) {
+    let text = gNavigatorBundle.getString("emeNotifications." + msgId + ".learnMoreLabel");
     let baseURL = Services.urlFormatter.formatURLPref("app.support.baseURL");
-    let link = document.createElement("label");
-    link.className = "text-link";
-    link.setAttribute("href", baseURL + "drm-content");
-    link.textContent = text;
-
-    let fragment = document.createDocumentFragment();
-    [prefix, link, suffix].forEach(n => fragment.appendChild(n));
-    return fragment;
-  },
-  getMessageWithBrandName(notificationId) {
-    let msgId = "emeNotifications." + notificationId + ".message";
-    return gNavigatorBundle.getFormattedString(msgId, [this._brandShortName]);
+    return "<label class='text-link' href='" + baseURL + "drm-content'>" +
+           text + "</label>";
   },
   receiveMessage({target: browser, data: data}) {
     let parsedData;
@@ -68,8 +56,8 @@ var gEMEHandler = {
 
     let notificationId;
     let buttonCallback;
-    // Notification message can be either a string or a DOM fragment.
-    let notificationMessage;    switch (status) {
+    let params = [];
+    switch (status) {
       case "available":
       case "cdm-created":
         // Only show the chain icon for proprietary CDMs. Clearkey is not one.
@@ -82,18 +70,18 @@ var gEMEHandler = {
       case "api-disabled":
       case "cdm-disabled":
         notificationId = "drmContentDisabled";
-        buttonCallback = gEMEHandler.ensureEMEEnabled.bind(gEMEHandler, browser, keySystem);
-        notificationMessage = this.getEMEDisabledFragment();
+        buttonCallback = gEMEHandler.ensureEMEEnabled.bind(gEMEHandler, browser, keySystem)
+        params = [this.getLearnMoreLink(notificationId)];
         break;
 
       case "cdm-insufficient-version":
         notificationId = "drmContentCDMInsufficientVersion";
-        notificationMessage = this.getMessageWithBrandName(notificationId);
+        params = [this._brandShortName];
         break;
 
       case "cdm-not-installed":
         notificationId = "drmContentCDMInstalling";
-        notificationMessage = this.getMessageWithBrandName(notificationId);
+        params = [this._brandShortName];
         break;
 
       case "cdm-not-supported":
@@ -104,28 +92,45 @@ var gEMEHandler = {
         Cu.reportError(new Error("Unknown message ('" + status + "') dealing with EME key request: " + data));
         return;
     }
-    
-    // Now actually create the notification
 
+    this.showNotificationBar(browser, notificationId, keySystem, params, buttonCallback);
+  },
+  showNotificationBar(browser, notificationId, keySystem, labelParams, callback) {
     let box = gBrowser.getNotificationBox(browser);
     if (box.getNotificationWithValue(notificationId)) {
       return;
     }
 
+    let msgPrefix = "emeNotifications." + notificationId + ".";
+    let msgId = msgPrefix + "message";
+
+    let message = labelParams.length ?
+                  gNavigatorBundle.getFormattedString(msgId, labelParams) :
+                  gNavigatorBundle.getString(msgId);
+
     let buttons = [];
-    if (buttonCallback) {
-      let msgPrefix = "emeNotifications." + notificationId + ".";
+    if (callback) {
       let btnLabelId = msgPrefix + "button.label";
       let btnAccessKeyId = msgPrefix + "button.accesskey";
       buttons.push({
         label: gNavigatorBundle.getString(btnLabelId),
         accessKey: gNavigatorBundle.getString(btnAccessKeyId),
-        callback: buttonCallback,
+        callback
       });
     }
 
     let iconURL = "chrome://browser/skin/drm-icon.svg#chains-black";
-	box.appendNotification(notificationMessage, notificationId, iconURL, box.PRIORITY_WARNING_MEDIUM,
+
+    // Do a little dance to get rich content into the notification:
+    let fragment = document.createDocumentFragment();
+    let descriptionContainer = document.createElement("description");
+    // eslint-disable-next-line no-unsanitized/property
+    descriptionContainer.innerHTML = message;
+    while (descriptionContainer.childNodes.length) {
+      fragment.appendChild(descriptionContainer.childNodes[0]);
+    }
+
+    box.appendNotification(fragment, notificationId, iconURL, box.PRIORITY_WARNING_MEDIUM,
                            buttons);
   },
   showPopupNotificationForSuccess(browser, keySystem) {
