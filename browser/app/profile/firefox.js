@@ -158,7 +158,7 @@ pref("app.update.elevation.promptMaxAttempts", 2);
 // If set to true, the Update Service will automatically download updates when
 // app updates are enabled per the app.update.enabled preference and if the user
 // can apply updates.
-pref("app.update.auto", true);
+pref("app.update.auto", false);
 
 // If set to true, the Update Service will present no UI for any event.
 pref("app.update.silent", false);
@@ -174,12 +174,6 @@ pref("app.update.staging.enabled", true);
 #endif
 
 // Update service URL:
-#ifdef XP_WIN
-pref("app.update.url", "https://www.waterfox.net/update/win64/%DISPLAY_VERSION%/%LOCALE%/%CHANNEL%/update.xml");
-#endif
-#ifdef XP_MACOSX
-pref("app.update.url", "https://www.waterfox.net/update/osx64/%DISPLAY_VERSION%/%LOCALE%/%CHANNEL%/update.xml");
-#endif
 #ifdef XP_LINUX
 pref("app.update.url", "https://www.waterfox.net/update/linux64/%DISPLAY_VERSION%/%LOCALE%/%CHANNEL%/update.xml");
 #endif
@@ -258,7 +252,7 @@ pref("browser.touchmode.auto", false);
 #endif
 
 // At startup, check if we're the default browser and prompt user if not.
-pref("browser.shell.checkDefaultBrowser", true);
+pref("browser.shell.checkDefaultBrowser", false);
 pref("browser.shell.shortcutFavicons",true);
 pref("browser.shell.mostRecentDateSetAsDefault", "");
 pref("browser.shell.skipDefaultBrowserCheckOnFirstRun", true);
@@ -268,10 +262,10 @@ pref("browser.defaultbrowser.notificationbar", false);
 
 // 0 = blank, 1 = home (browser.startup.homepage), 2 = last visited page, 3 = resume previous browser session
 // The behavior of option 3 is detailed at: http://wiki.mozilla.org/Session_Restore
-pref("browser.startup.page",                1);
+pref("browser.startup.page",                3);
 pref("browser.startup.homepage",            "chrome://branding/locale/browserconfig.properties");
 // Whether we should skip the homepage when opening the first-run page
-pref("browser.startup.firstrunSkipsHomepage", true);
+pref("browser.startup.firstrunSkipsHomepage", false);
 
 // This url, if changed, MUST continue to point to an https url. Pulling arbitrary content to inject into
 // this page over http opens us up to a man-in-the-middle attack that we'd rather not face. If you are a downstream
@@ -290,16 +284,8 @@ pref("browser.showQuitWarning", false);
 pref("browser.fullscreen.autohide", true);
 pref("browser.overlink-delay", 80);
 
-#ifdef UNIX_BUT_NOT_MAC
 pref("browser.urlbar.clickSelectsAll", false);
-#else
-pref("browser.urlbar.clickSelectsAll", true);
-#endif
-#ifdef UNIX_BUT_NOT_MAC
 pref("browser.urlbar.doubleClickSelectsAll", true);
-#else
-pref("browser.urlbar.doubleClickSelectsAll", false);
-#endif
 
 // Allow dropping text directly in urlbar and loading
 pref("browser.urlbar.dragDropLoad", false);
@@ -376,9 +362,7 @@ pref("browser.download.animateNotifications", true);
 // This records whether or not the panel has been shown at least once.
 pref("browser.download.panel.shown", false);
 
-#ifndef XP_MACOSX
 pref("browser.helperApps.deleteTempFileOnExit", true);
-#endif
 
 // search engines URL
 pref("browser.search.searchEnginesURL",      "https://addons.mozilla.org/%LOCALE%/firefox/search-engines/");
@@ -446,11 +430,7 @@ pref("browser.link.open_newwindow.restriction", 2);
 // window.open arguments) when the browser is in fullscreen mode.
 // We set this differently on Mac because the fullscreen implementation there is
 // different.
-#ifdef XP_MACOSX
-pref("browser.link.open_newwindow.disabled_in_fullscreen", true);
-#else
 pref("browser.link.open_newwindow.disabled_in_fullscreen", false);
-#endif
 
 #ifdef NIGHTLY_BUILD
 pref("browser.photon.structure.enabled", true);
@@ -470,11 +450,7 @@ pref("browser.tabs.opentabfor.middleclick", true);
 pref("browser.tabs.loadDivertedInBackground", false);
 pref("browser.tabs.loadBookmarksInBackground", false);
 pref("browser.tabs.tabClipWidth", 140);
-#ifdef UNIX_BUT_NOT_MAC
 pref("browser.tabs.drawInTitlebar", false);
-#else
-pref("browser.tabs.drawInTitlebar", true);
-#endif
 pref("browser.tabs.duplicateTab", true);
 
 // 0 - Disable the tabbar session restore button.
@@ -513,9 +489,7 @@ pref("browser.bookmarks.showRecentlyBookmarked",  true);
 // Scripts & Windows prefs
 pref("dom.disable_open_during_load",              true);
 pref("javascript.options.showInConsole",          true);
-#ifdef DEBUG
 pref("general.warnOnAboutConfig",                 false);
-#endif
 
 // This is the pref to control the location bar, change this to true to
 // force this - this makes the origin of popup windows more obvious to avoid
@@ -585,26 +559,14 @@ pref("browser.gesture.swipe.left", "Browser:BackOrBackDuplicate");
 pref("browser.gesture.swipe.right", "Browser:ForwardOrForwardDuplicate");
 pref("browser.gesture.swipe.up", "cmd_scrollTop");
 pref("browser.gesture.swipe.down", "cmd_scrollBottom");
-#ifdef XP_MACOSX
-pref("browser.gesture.pinch.latched", true);
-pref("browser.gesture.pinch.threshold", 150);
-#else
 pref("browser.gesture.pinch.latched", false);
 pref("browser.gesture.pinch.threshold", 25);
-#endif
-#ifdef XP_WIN
-// Enabled for touch input display zoom.
-pref("browser.gesture.pinch.out", "cmd_fullZoomEnlarge");
-pref("browser.gesture.pinch.in", "cmd_fullZoomReduce");
-pref("browser.gesture.pinch.out.shift", "cmd_fullZoomReset");
-pref("browser.gesture.pinch.in.shift", "cmd_fullZoomReset");
-#else
 // Disabled by default due to issues with track pad input.
 pref("browser.gesture.pinch.out", "");
 pref("browser.gesture.pinch.in", "");
 pref("browser.gesture.pinch.out.shift", "");
 pref("browser.gesture.pinch.in.shift", "");
-#endif
+
 pref("browser.gesture.twist.latched", false);
 pref("browser.gesture.twist.threshold", 0);
 pref("browser.gesture.twist.right", "cmd_gestureRotateRight");
@@ -618,27 +580,9 @@ pref("browser.snapshots.limit", 0);
 // 1: Scrolling contents
 // 2: Go back or go forward, in your history
 // 3: Zoom in or out.
-#ifdef XP_MACOSX
-// On OS X, if the wheel has one axis only, shift+wheel comes through as a
-// horizontal scroll event. Thus, we can't assign anything other than normal
-// scrolling to shift+wheel.
-pref("mousewheel.with_alt.action", 2);
-pref("mousewheel.with_shift.action", 1);
-// On MacOS X, control+wheel is typically handled by system and we don't
-// receive the event.  So, command key which is the main modifier key for
-// acceleration is the best modifier for zoom-in/out.  However, we should keep
-// the control key setting for backward compatibility.
-pref("mousewheel.with_meta.action", 3); // command key on Mac
-// Disable control-/meta-modified horizontal mousewheel events, since
-// those are used on Mac as part of modified swipe gestures (e.g.
-// Left swipe+Cmd = go back in a new tab).
-pref("mousewheel.with_control.action.override_x", 0);
-pref("mousewheel.with_meta.action.override_x", 0);
-#else
 pref("mousewheel.with_alt.action", 1);
 pref("mousewheel.with_shift.action", 2);
 pref("mousewheel.with_meta.action", 1); // win key on Win, Super/Hyper on Linux
-#endif
 pref("mousewheel.with_control.action",3);
 pref("mousewheel.with_win.action", 1);
 
@@ -656,18 +600,12 @@ pref("network.protocol-handler.external.mailto", true); // for mail
 pref("network.protocol-handler.external.news", true);   // for news
 pref("network.protocol-handler.external.snews", true);  // for secure news
 pref("network.protocol-handler.external.nntp", true);   // also news
-#ifdef XP_WIN
-pref("network.protocol-handler.external.ms-windows-store", true);
-#endif
 
 // ...without warning dialogs
 pref("network.protocol-handler.warn-external.mailto", false);
 pref("network.protocol-handler.warn-external.news", false);
 pref("network.protocol-handler.warn-external.snews", false);
 pref("network.protocol-handler.warn-external.nntp", false);
-#ifdef XP_WIN
-pref("network.protocol-handler.warn-external.ms-windows-store", false);
-#endif
 
 // By default, all protocol handlers are exposed.  This means that
 // the browser will respond to openURL commands for all URL types.
@@ -723,11 +661,7 @@ pref("plugins.favorfallback.mode", "follow-ctp");
 pref("plugins.favorfallback.rules", "nosrc,video");
 
 
-#ifdef XP_WIN
-pref("browser.preferences.instantApply", false);
-#else
 pref("browser.preferences.instantApply", true);
-#endif
 
 // Toggling Search bar on and off in about:preferences
 pref("browser.preferences.search", true);
@@ -754,11 +688,7 @@ pref("browser.download.hide_plugins_without_extensions", true);
 // 0 goes Back/Forward
 // 1 act like PgUp/PgDown
 // 2 and other values, nothing
-#ifdef UNIX_BUT_NOT_MAC
 pref("browser.backspace_action", 2);
-#else
-pref("browser.backspace_action", 0);
-#endif
 
 // this will automatically enable inline spellchecking (if it is available) for
 // editable elements in HTML
@@ -1031,66 +961,6 @@ pref("browser.flash-protected-mode-flip.done", false);
 
 pref("dom.ipc.shims.enabledWarnings", false);
 
-#if defined(XP_WIN) && defined(MOZ_SANDBOX)
-// Controls whether and how the Windows NPAPI plugin process is sandboxed.
-// To get a different setting for a particular plugin replace "default", with
-// the plugin's nice file name, see: nsPluginTag::GetNiceFileName.
-// On windows these levels are:
-// 0 - no sandbox
-// 1 - sandbox with USER_NON_ADMIN access token level
-// 2 - a more strict sandbox, which might cause functionality issues. This now
-//     includes running at low integrity.
-// 3 - the strongest settings we seem to be able to use without breaking
-//     everything, but will probably cause some functionality restrictions
-pref("dom.ipc.plugins.sandbox-level.default", 0);
-#if defined(_AMD64_)
-// The lines in PluginModuleParent.cpp should be changed in line with this.
-pref("dom.ipc.plugins.sandbox-level.flash", 2);
-#else
-pref("dom.ipc.plugins.sandbox-level.flash", 0);
-#endif
-
-#if defined(MOZ_CONTENT_SANDBOX)
-// This controls the strength of the Windows content process sandbox for testing
-// purposes. This will require a restart.
-// On windows these levels are:
-// See - security/sandbox/win/src/sandboxbroker/sandboxBroker.cpp
-// SetSecurityLevelForContentProcess() for what the different settings mean.
-pref("security.sandbox.content.level", 1);
-
-// This controls the depth of stack trace that is logged when Windows sandbox
-// logging is turned on.  This is only currently available for the content
-// process because the only other sandbox (for GMP) has too strict a policy to
-// allow stack tracing.  This does not require a restart to take effect.
-pref("security.sandbox.windows.log.stackTraceDepth", 0);
-#endif
-
-// This controls the strength of the Windows GPU process sandbox.  Changes
-// will require restart.
-// For information on what the level number means, see
-// SetSecurityLevelForGPUProcess() in
-// security/sandbox/win/src/sandboxbroker/sandboxBroker.cpp
-pref("security.sandbox.gpu.level", 0);
-#endif
-
-#if defined(XP_MACOSX) && defined(MOZ_SANDBOX) && defined(MOZ_CONTENT_SANDBOX)
-// This pref is discussed in bug 1083344, the naming is inspired from its
-// Windows counterpart, but on Mac it's an integer which means:
-// 0 -> "no sandbox" (nightly only)
-// 1 -> "preliminary content sandboxing enabled: write access to
-//       home directory is prevented"
-// 2 -> "preliminary content sandboxing enabled with profile protection:
-//       write access to home directory is prevented, read and write access
-//       to ~/Library and profile directories are prevented (excluding
-//       $PROFILE/{extensions,chrome})"
-// 3 -> "no global read/write access, read access permitted to
-//       $PROFILE/{extensions,chrome}"
-// This setting is read when the content process is started. On Mac the content
-// process is killed when all windows are closed, so a change will take effect
-// when the 1st window is opened.
-pref("security.sandbox.content.level", 1);
-#endif
-
 #if defined(XP_LINUX) && defined(MOZ_SANDBOX) && defined(MOZ_CONTENT_SANDBOX)
 // This pref is introduced as part of bug 742434, the naming is inspired from
 // its Windows/Mac counterpart, but on Linux it's an integer which means:
@@ -1119,46 +989,10 @@ pref("security.sandbox.content.read_path_whitelist", "");
 pref("security.sandbox.content.syscall_whitelist", "");
 #endif
 
-#if defined(XP_MACOSX) || defined(XP_WIN)
-#if defined(MOZ_SANDBOX) && defined(MOZ_CONTENT_SANDBOX)
-// ID (a UUID when set by gecko) that is used to form the name of a
-// sandbox-writable temporary directory to be used by content processes
-// when a temporary writable file is required in a level 1 sandbox.
-pref("security.sandbox.content.tempDirSuffix", "");
-#endif
-#endif
-
 #if defined(MOZ_SANDBOX)
 // This pref determines if messages relevant to sandbox violations are
 // logged.
-#if defined(XP_WIN) || defined(XP_MACOSX)
-pref("security.sandbox.logging.enabled", false);
-#else
 pref("security.sandbox.logging.enabled", true);
-#endif
-#endif
-
-// This pref governs whether we attempt to work around problems caused by
-// plugins using OS calls to manipulate the cursor while running out-of-
-// process.  These workarounds all involve intercepting (hooking) certain
-// OS calls in the plugin process, then arranging to make certain OS calls
-// in the browser process.  Eventually plugins will be required to use the
-// NPAPI to manipulate the cursor, and these workarounds will be removed.
-// See bug 621117.
-#ifdef XP_MACOSX
-pref("dom.ipc.plugins.nativeCursorSupport", true);
-#endif
-
-#ifdef XP_WIN
-pref("browser.taskbar.previews.enable", false);
-pref("browser.taskbar.previews.max", 20);
-pref("browser.taskbar.previews.cachetime", 5);
-pref("browser.taskbar.lists.enabled", true);
-pref("browser.taskbar.lists.frequent.enabled", true);
-pref("browser.taskbar.lists.recent.enabled", false);
-pref("browser.taskbar.lists.maxListItemCount", 7);
-pref("browser.taskbar.lists.tasks.enabled", true);
-pref("browser.taskbar.lists.refreshInSeconds", 120);
 #endif
 
 // Preferences to be synced by default
@@ -1287,11 +1121,7 @@ pref("browser.newtabpage.columns", 5);
 sticky_pref("browser.newtabpage.directory.source", "data:application/json,{}");
 
 // activates Activity Stream
-#ifdef NIGHTLY_BUILD
-pref("browser.newtabpage.activity-stream.enabled", true);
-#else
 pref("browser.newtabpage.activity-stream.enabled", false);
-#endif
 
 // Enable the DOM fullscreen API.
 pref("full-screen-api.enabled", true);
@@ -1347,14 +1177,6 @@ pref("plain_text.wrap_long_lines", true);
 pref("dom.debug.propagate_gesture_events_through_content", false);
 
 pref("geo.wifi.uri", "");
-
-#ifdef XP_MACOSX
-sticky_pref("geo.provider.use_corelocation", true);
-#endif
-
-#ifdef XP_WIN
-sticky_pref("geo.provider.ms-windows-location", true);
-#endif
 
 #ifdef MOZ_WIDGET_GTK
 #ifdef MOZ_GPSD
@@ -1624,11 +1446,7 @@ pref("signon.schemeUpgrades", true);
 // in toolkit.
 //
 // This feature is only enabled on Nightly for Linux until bug 1306295 is fixed.
-#ifdef UNIX_BUT_NOT_MAC
 #if defined(NIGHTLY_BUILD)
-pref("print.use_simplify_page", true);
-#endif
-#else
 pref("print.use_simplify_page", true);
 #endif
 

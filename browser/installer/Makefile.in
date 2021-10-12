@@ -65,20 +65,6 @@ endif
 
 DEFINES += -DMOZ_CHILD_PROCESS_NAME=$(MOZ_CHILD_PROCESS_NAME)
 
-# Set MSVC dlls version to package, if any.
-ifdef MOZ_NO_DEBUG_RTL
-ifdef WIN32_REDIST_DIR
-ifndef MOZ_ARTIFACT_BUILDS
-DEFINES += -DMOZ_PACKAGE_MSVC_DLLS=1
-DEFINES += -DMSVC_C_RUNTIME_DLL=$(MSVC_C_RUNTIME_DLL)
-DEFINES += -DMSVC_CXX_RUNTIME_DLL=$(MSVC_CXX_RUNTIME_DLL)
-endif
-ifdef WIN_UCRT_REDIST_DIR
-DEFINES += -DMOZ_PACKAGE_WIN_UCRT_DLLS=1
-endif
-endif
-endif
-
 ifneq (,$(filter WINNT Darwin Android,$(OS_TARGET)))
 DEFINES += -DMOZ_SHARED_MOZGLUE=1
 endif
@@ -89,13 +75,6 @@ endif
 
 ifdef MAKENSISU
 DEFINES += -DHAVE_MAKENSISU=1
-endif
-
-ifeq (cocoa,$(MOZ_WIDGET_TOOLKIT))
-MOZ_PKG_MAC_DSSTORE=branding/dsstore
-MOZ_PKG_MAC_BACKGROUND=branding/background.png
-MOZ_PKG_MAC_ICON=branding/disk.icns
-MOZ_PKG_MAC_EXTRA=--symlink '/Applications:/ '
 endif
 
 include $(topsrcdir)/toolkit/mozapps/installer/signing.mk
@@ -110,19 +89,10 @@ BINPATH = bin
 endif
 DEFINES += -DBINPATH='$(BINPATH)'
 
-ifeq (cocoa,$(MOZ_WIDGET_TOOLKIT))
-RESPATH = $(_APPNAME)/Contents/Resources
-else
 RESPATH = $(BINPATH)
-endif
 DEFINES += -DRESPATH="$(RESPATH)"
 
 LPROJ_ROOT = $(firstword $(subst -, ,$(AB_CD)))
-ifeq (cocoa,$(MOZ_WIDGET_TOOLKIT))
-ifeq (zh-TW,$(AB_CD))
-LPROJ_ROOT := $(subst -,_,$(AB_CD))
-endif
-endif
 DEFINES += -DLPROJ_ROOT=$(LPROJ_ROOT)
 
 DEFINES += -DMOZ_ICU_VERSION=$(MOZ_ICU_VERSION)
@@ -155,16 +125,8 @@ ifeq (,$(filter FasterMake+RecursiveMake,$(BUILD_BACKENDS)))
 	$(MAKE) -C $(DEPTH)/browser/locales langpack
 endif
 
-ifeq (WINNT,$(OS_ARCH))
-PKGCOMP_FIND_OPTS =
-else
 PKGCOMP_FIND_OPTS = -L
-endif
-ifeq (Darwin, $(OS_ARCH))
-FINDPATH = $(_APPNAME)/Contents/MacOS
-else
 FINDPATH=bin
-endif
 
 package-compare::
 	cd $(DIST); find $(PKGCOMP_FIND_OPTS) '$(FINDPATH)' -type f | sort > bin-list.txt
