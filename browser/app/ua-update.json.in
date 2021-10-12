@@ -35,6 +35,7 @@
   "netflix.com": "Mozilla/5.0 (%OS_SLICE% rv:78.0) @GK_SLICE@ Firefox/78.0",
   "patientaccess.com": "Mozilla/5.0 (%OS_SLICE% rv:60.0) @GK_SLICE@ Firefox/60.0",
   "primevideo.com": "Mozilla/5.0 (%OS_SLICE% rv:60.0) @GK_SLICE@ Firefox/60.0",
+  "sgaf.de": "gecko",
   "slack.com": "Mozilla/5.0 (%OS_SLICE% rv:68.0) @GK_SLICE@ Firefox/68.0",
   "steamcommunity.com": "Mozilla/5.0 (%OS_SLICE%) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/76.0.3809.132 Safari/537.36",
   "trello.com": "Mozilla/5.0 (%OS_SLICE% rv:68.0) @GK_SLICE@ Firefox/68.0",
