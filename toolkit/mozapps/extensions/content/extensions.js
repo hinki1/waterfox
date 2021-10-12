@@ -3220,7 +3220,7 @@ var gDetailView = {
       // localisation.
       if (aAddon.isGMPlugin) {
         // eslint-disable-next-line no-unsanitized/property
-        fullDesc.unsafeSetInnerHTML(aAddon.fullDescription);
+        fullDesc.innerHTML = aAddon.fullDescription;
       } else {
         fullDesc.textContent = aAddon.fullDescription;
       }
