@@ -270,12 +270,7 @@ class nsIScriptTimeoutHandler;
 #include <android/log.h>
 #endif
 
-#ifdef XP_WIN
-#include <process.h>
-#define getpid _getpid
-#else
 #include <unistd.h> // for getpid()
-#endif
 
 static const char kStorageEnabled[] = "dom.storage.enabled";
 
@@ -6489,18 +6484,7 @@ nsGlobalWindow::CheckSecurityLeftAndTop(int32_t* aLeft, int32_t* aTop,
       screen->GetAvailLeft(&screenLeft);
       screen->GetAvailWidth(&screenWidth);
       screen->GetAvailHeight(&screenHeight);
-#if defined(XP_MACOSX)
-      /* The mac's coordinate system is different from the assumed Windows'
-         system. It offsets by the height of the menubar so that a window
-         placed at (0,0) will be entirely visible. Unfortunately that
-         correction is made elsewhere (in Widget) and the meaning of
-         the Avail... coordinates is overloaded. Here we allow a window
-         to be placed at (0,0) because it does make sense to do so.
-      */
-      screen->GetTop(&screenTop);
-#else
       screen->GetAvailTop(&screenTop);
-#endif
 
       if (aLeft) {
         if (screenLeft+screenWidth < *aLeft+winWidth)
@@ -7343,21 +7327,8 @@ nsGlobalWindow::Dump(const nsAString& aStr)
 
   char *cstr = ToNewUTF8String(aStr);
 
-#if defined(XP_MACOSX)
-  // have to convert \r to \n so that printing to the console works
-  char *c = cstr, *cEnd = cstr + strlen(cstr);
-  while (c < cEnd) {
-    if (*c == '\r')
-      *c = '\n';
-    c++;
-  }
-#endif
-
   if (cstr) {
     MOZ_LOG(nsContentUtils::DOMDumpLog(), LogLevel::Debug, ("[Window.Dump] %s", cstr));
-#ifdef XP_WIN
-    PrintToDebugger(cstr);
-#endif
 #ifdef ANDROID
     __android_log_write(ANDROID_LOG_INFO, "GeckoDump", cstr);
 #endif
@@ -10697,10 +10668,8 @@ nsGlobalWindow::SetFocusedNode(nsIContent* aNode,
       // be permanent for the window. On Windows, focus rings are only shown
       // when the FLAG_SHOWRING flag is used. On other platforms, focus rings
       // are only visible on some elements.
-#ifndef XP_WIN
       !(mFocusMethod & nsIFocusManager::FLAG_BYMOUSE) ||
       ShouldShowFocusRingIfFocusedByMouse(aNode) ||
-#endif
       aFocusMethod & nsIFocusManager::FLAG_SHOWRING) {
         mShowFocusRingForContent = true;
     }
