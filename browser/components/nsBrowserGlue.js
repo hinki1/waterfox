@@ -688,40 +688,6 @@ BrowserGlue.prototype = {
    *        why a profile reset is offered.
    */
   _resetProfileNotification(reason) {
-    let win = RecentWindow.getMostRecentBrowserWindow();
-    if (!win)
-      return;
-
-    Cu.import("resource://gre/modules/ResetProfile.jsm");
-    if (!ResetProfile.resetSupported())
-      return;
-
-    let productName = gBrandBundle.GetStringFromName("brandShortName");
-    let resetBundle = Services.strings
-                              .createBundle("chrome://global/locale/resetProfile.properties");
-
-    let message;
-    if (reason == "unused") {
-      message = resetBundle.formatStringFromName("resetUnusedProfile.message", [productName], 1);
-    } else if (reason == "uninstall") {
-      message = resetBundle.formatStringFromName("resetUninstalled.message", [productName], 1);
-    } else {
-      throw new Error(`Unknown reason (${reason}) given to _resetProfileNotification.`);
-    }
-    let buttons = [
-      {
-        label:     resetBundle.formatStringFromName("refreshProfile.resetButton.label", [productName], 1),
-        accessKey: resetBundle.GetStringFromName("refreshProfile.resetButton.accesskey"),
-        callback() {
-          ResetProfile.openConfirmationDialog(win);
-        }
-      },
-    ];
-
-    let nb = win.document.getElementById("global-notificationbox");
-    nb.appendNotification(message, "reset-profile-notification",
-                          "chrome://global/skin/icons/question-16.png",
-                          nb.PRIORITY_INFO_LOW, buttons);
   },
 
   _notifyUnsignedAddonsDisabled() {
@@ -816,16 +782,6 @@ BrowserGlue.prototype = {
         });
       }
     });
-
-    // Offer to reset a user's profile if it hasn't been used for 60 days.
-    const OFFER_PROFILE_RESET_INTERVAL_MS = 60 * 24 * 60 * 60 * 1000;
-    let lastUse = Services.appinfo.replacedLockTime;
-    let disableResetPrompt = Services.prefs.getBoolPref("browser.disableResetPrompt", false);
-
-    if (!disableResetPrompt && lastUse &&
-        Date.now() - lastUse >= OFFER_PROFILE_RESET_INTERVAL_MS) {
-      this._resetProfileNotification("unused");
-    }
 
     this._checkForOldBuildUpdates();
 
