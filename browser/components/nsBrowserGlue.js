@@ -274,7 +274,7 @@ function BrowserGlue() {
  * OS X has the concept of zero-window sessions and therefore ignores the
  * browser-lastwindow-close-* topics.
  */
-const OBSERVE_LASTWINDOW_CLOSE_TOPICS = AppConstants.platform != "macosx";
+const OBSERVE_LASTWINDOW_CLOSE_TOPICS = true;
 
 BrowserGlue.prototype = {
   _saveSession: false,
@@ -515,12 +515,6 @@ BrowserGlue.prototype = {
     this._flashHangCount = 0;
     this._firstWindowReady = new Promise(resolve => this._firstWindowLoaded = resolve);
 
-    if (AppConstants.platform == "macosx" ||
-        (AppConstants.platform == "win" && AppConstants.RELEASE_OR_BETA)) {
-      // Handles prompting to inform about incompatibilites when accessibility
-      // and e10s are active together.
-      E10SAccessibilityCheck.init();
-    }
   },
 
   // cleanup (called on application shutdown)
@@ -801,17 +795,6 @@ BrowserGlue.prototype = {
       Services.ppmm.loadProcessScript("resource://pdf.js/pdfjschildbootstrap-enabled.js", true);
     }
 
-    if (AppConstants.platform == "win") {
-      // For Windows 7, initialize the jump list module.
-      const WINTASKBAR_CONTRACTID = "@mozilla.org/windows-taskbar;1";
-      if (WINTASKBAR_CONTRACTID in Cc &&
-          Cc[WINTASKBAR_CONTRACTID].getService(Ci.nsIWinTaskbar).available) {
-        let temp = {};
-        Cu.import("resource:///modules/WindowsJumpLists.jsm", temp);
-        temp.WinTaskbarJumpList.startup();
-      }
-    }
-
     TabCrashHandler.init();
     if (AppConstants.MOZ_CRASHREPORTER) {
       PluginCrashReporter.init();
@@ -842,25 +825,6 @@ BrowserGlue.prototype = {
     if (!disableResetPrompt && lastUse &&
         Date.now() - lastUse >= OFFER_PROFILE_RESET_INTERVAL_MS) {
       this._resetProfileNotification("unused");
-    } else if (AppConstants.platform == "win" && !disableResetPrompt) {
-      // Check if we were just re-installed and offer Firefox Reset
-      let updateChannel;
-      try {
-        updateChannel = Cu.import("resource://gre/modules/UpdateUtils.jsm", {}).UpdateUtils.UpdateChannel;
-      } catch (ex) {}
-      if (updateChannel) {
-        let uninstalledValue =
-          WindowsRegistry.readRegKey(Ci.nsIWindowsRegKey.ROOT_KEY_CURRENT_USER,
-                                     "Software\\Mozilla\\Waterfox",
-                                     `Uninstalled-${updateChannel}`);
-        let removalSuccessful =
-          WindowsRegistry.removeRegKey(Ci.nsIWindowsRegKey.ROOT_KEY_CURRENT_USER,
-                                       "Software\\Mozilla\\Waterfox",
-                                       `Uninstalled-${updateChannel}`);
-        if (removalSuccessful && uninstalledValue == "True") {
-          this._resetProfileNotification("uninstall");
-        }
-      }
     }
 
     this._checkForOldBuildUpdates();
@@ -2342,16 +2306,6 @@ var DefaultBrowserCheck = {
   setAsDefault() {
     let claimAllTypes = true;
     let setAsDefaultError = false;
-    if (AppConstants.platform == "win") {
-      try {
-        // In Windows 8+, the UI for selecting default protocol is much
-        // nicer than the UI for setting file type associations. So we
-        // only show the protocol association screen on Windows 8+.
-        // Windows 8 is version 6.2.
-        let version = Services.sysinfo.getProperty("version");
-        claimAllTypes = (parseFloat(version) < 6.2);
-      } catch (ex) { }
-    }
     try {
       ShellService.setDefaultBrowser(claimAllTypes, false);
     } catch (ex) {
