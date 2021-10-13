@@ -293,7 +293,6 @@ BrowserGlue.prototype = {
   },
 
   _setSyncAutoconnectDelay: function BG__setSyncAutoconnectDelay() {
-    return;
   },
 
   // nsIObserver implementation
@@ -787,10 +786,6 @@ BrowserGlue.prototype = {
 
     AutoCompletePopup.init();
     DateTimePickerHelper.init();
-    // Check if Sync is configured
-    if (Services.prefs.prefHasUserValue("services.sync.username")) {
-      WeaveService.init();
-    }
 
     PageThumbs.init();
 
