@@ -293,25 +293,7 @@ BrowserGlue.prototype = {
   },
 
   _setSyncAutoconnectDelay: function BG__setSyncAutoconnectDelay() {
-    // Assume that a non-zero value for services.sync.autoconnectDelay should override
-    if (Services.prefs.prefHasUserValue("services.sync.autoconnectDelay")) {
-      let prefDelay = Services.prefs.getIntPref("services.sync.autoconnectDelay");
-
-      if (prefDelay > 0)
-        return;
-    }
-
-    // delays are in seconds
-    const MAX_DELAY = 300;
-    let delay = 3;
-    let browserEnum = Services.wm.getEnumerator("navigator:browser");
-    while (browserEnum.hasMoreElements()) {
-      delay += browserEnum.getNext().gBrowser.tabs.length;
-    }
-    delay = delay <= MAX_DELAY ? delay : MAX_DELAY;
-
-    Cu.import("resource://services-sync/main.js");
-    Weave.Service.scheduler.delayedAutoConnect(delay);
+    return;
   },
 
   // nsIObserver implementation
@@ -364,25 +346,16 @@ BrowserGlue.prototype = {
         }
         break;
       case "weave:service:ready":
-        this._setSyncAutoconnectDelay();
         break;
       case "fxaccounts:onverified":
-        this._showSyncStartedDoorhanger();
         break;
       case "fxaccounts:device_connected":
-        this._onDeviceConnected(data);
         break;
       case "fxaccounts:verify_login":
-        this._onVerifyLoginNotification(JSON.parse(data));
         break;
       case "fxaccounts:device_disconnected":
-        data = JSON.parse(data);
-        if (data.isLocalDevice) {
-          this._onDeviceDisconnected();
-        }
         break;
       case "weave:engine:clients:display-uris":
-        this._onDisplaySyncURIs(subject);
         break;
       case "session-save":
         this._setPrefToSaveSession(true);
@@ -1629,18 +1602,6 @@ BrowserGlue.prototype = {
   },
 
   _showSyncStartedDoorhanger() {
-    let bundle = Services.strings.createBundle("chrome://browser/locale/accounts.properties");
-    let productName = gBrandBundle.GetStringFromName("brandShortName");
-    let title = bundle.GetStringFromName("syncStartNotification.title");
-    let body = bundle.formatStringFromName("syncStartNotification.body2",
-                                            [productName], 1);
-
-    let clickCallback = (subject, topic, data) => {
-      if (topic != "alertclickcallback")
-        return;
-      this._openPreferences("sync", { origin: "doorhanger" });
-    }
-    this.AlertsService.showAlertNotification(null, title, body, true, null, clickCallback);
   },
 
   // eslint-disable-next-line complexity
@@ -2195,150 +2156,15 @@ BrowserGlue.prototype = {
    * We open the received URIs in background tabs.
    */
   async _onDisplaySyncURIs(data) {
-    try {
-      // The payload is wrapped weirdly because of how Sync does notifications.
-      const URIs = data.wrappedJSObject.object;
-
-      // win can be null, but it's ok, we'll assign it later in openTab()
-      let win = RecentWindow.getMostRecentBrowserWindow({private: false});
-
-      const openTab = async (URI) => {
-        let tab;
-        if (!win) {
-          win = await this._openURLInNewWindow(URI.uri);
-          let tabs = win.gBrowser.tabs;
-          tab = tabs[tabs.length - 1];
-        } else {
-          tab = win.gBrowser.addTab(URI.uri);
-        }
-        tab.setAttribute("attention", true);
-        return tab;
-      };
-
-      const firstTab = await openTab(URIs[0]);
-      await Promise.all(URIs.slice(1).map(URI => openTab(URI)));
-
-      let title, body;
-      const deviceName = Weave.Service.clientsEngine.getClientName(URIs[0].clientId);
-      const bundle = Services.strings.createBundle("chrome://browser/locale/accounts.properties");
-      if (URIs.length == 1) {
-        // Due to bug 1305895, tabs from iOS may not have device information, so
-        // we have separate strings to handle those cases. (See Also
-        // unnamedTabsArrivingNotificationNoDevice.body below)
-        if (deviceName) {
-          title = bundle.formatStringFromName("tabArrivingNotificationWithDevice.title", [deviceName], 1);
-        } else {
-          title = bundle.GetStringFromName("tabArrivingNotification.title");
-        }
-        // Use the page URL as the body. We strip the fragment and query to
-        // reduce size, and also format it the same way that the url bar would.
-        body = URIs[0].uri.replace(/[?#].*$/, "");
-        if (win.gURLBar) {
-          body = win.gURLBar.trimValue(body);
-        }
-      } else {
-        title = bundle.GetStringFromName("multipleTabsArrivingNotification.title");
-        const allSameDevice = URIs.every(URI => URI.clientId == URIs[0].clientId);
-        const unknownDevice = allSameDevice && !deviceName;
-        let tabArrivingBody;
-        if (unknownDevice) {
-          tabArrivingBody = "unnamedTabsArrivingNotificationNoDevice.body";
-        } else if (allSameDevice) {
-          tabArrivingBody = "unnamedTabsArrivingNotification2.body";
-        } else {
-          tabArrivingBody = "unnamedTabsArrivingNotificationMultiple2.body"
-        }
-
-        body = bundle.GetStringFromName(tabArrivingBody);
-        body = PluralForm.get(URIs.length, body);
-        body = body.replace("#1", URIs.length);
-        body = body.replace("#2", deviceName);
-      }
-
-      const clickCallback = (obsSubject, obsTopic, obsData) => {
-        if (obsTopic == "alertclickcallback") {
-          win.gBrowser.selectedTab = firstTab;
-        }
-      }
-
-      // Specify an icon because on Windows no icon is shown at the moment
-      let imageURL;
-      if (AppConstants.platform == "win") {
-        imageURL = "chrome://branding/content/icon64.png";
-      }
-      this.AlertsService.showAlertNotification(imageURL, title, body, true, null, clickCallback);
-    } catch (ex) {
-      Cu.reportError("Error displaying tab(s) received by Sync: " + ex);
-    }
   },
 
   async _onVerifyLoginNotification({body, title, url}) {
-    let tab;
-    let imageURL;
-    if (AppConstants.platform == "win") {
-      imageURL = "chrome://branding/content/icon64.png";
-    }
-    let win = RecentWindow.getMostRecentBrowserWindow({private: false});
-    if (!win) {
-      win = await this._openURLInNewWindow(url);
-      let tabs = win.gBrowser.tabs;
-      tab = tabs[tabs.length - 1];
-    } else {
-      tab = win.gBrowser.addTab(url);
-    }
-    tab.setAttribute("attention", true);
-    let clickCallback = (subject, topic, data) => {
-      if (topic != "alertclickcallback")
-        return;
-      win.gBrowser.selectedTab = tab;
-    };
-
-    try {
-      this.AlertsService.showAlertNotification(imageURL, title, body, true, null, clickCallback);
-    } catch (ex) {
-      Cu.reportError("Error notifying of a verify login event: " + ex);
-    }
   },
 
   _onDeviceConnected(deviceName) {
-    let accountsBundle = Services.strings.createBundle(
-      "chrome://browser/locale/accounts.properties"
-    );
-    let title = accountsBundle.GetStringFromName("deviceConnectedTitle");
-    let body = accountsBundle.formatStringFromName("deviceConnectedBody" +
-                                                   (deviceName ? "" : ".noDeviceName"),
-                                                   [deviceName], 1);
-
-    let clickCallback = async (subject, topic, data) => {
-      if (topic != "alertclickcallback")
-        return;
-      let url = await this.fxAccounts.promiseAccountsManageDevicesURI("device-connected-notification");
-      let win = RecentWindow.getMostRecentBrowserWindow({private: false});
-      if (!win) {
-        this._openURLInNewWindow(url);
-      } else {
-        win.gBrowser.addTab(url);
-      }
-    };
-
-    try {
-      this.AlertsService.showAlertNotification(null, title, body, true, null, clickCallback);
-    } catch (ex) {
-      Cu.reportError("Error notifying of a new Sync device: " + ex);
-    }
   },
 
   _onDeviceDisconnected() {
-    let bundle = Services.strings.createBundle("chrome://browser/locale/accounts.properties");
-    let title = bundle.GetStringFromName("deviceDisconnectedNotification.title");
-    let body = bundle.GetStringFromName("deviceDisconnectedNotification.body");
-
-    let clickCallback = (subject, topic, data) => {
-      if (topic != "alertclickcallback")
-        return;
-      this._openPreferences("sync", { origin: "devDisconnectedAlert"});
-    }
-    this.AlertsService.showAlertNotification(null, title, body, true, null, clickCallback);
   },
 
   _handleFlashHang() {
