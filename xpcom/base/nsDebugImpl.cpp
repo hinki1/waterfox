@@ -181,9 +181,7 @@ nsDebugImpl::GetIsDebuggerAttached(bool* aResult)
 {
   *aResult = false;
 
-#if defined(XP_WIN)
-  *aResult = ::IsDebuggerPresent();
-#elif defined(XP_MACOSX) || defined(__DragonFly__) || defined(__FreeBSD__) \
+#if defined(XP_MACOSX) || defined(__DragonFly__) || defined(__FreeBSD__) \
    || defined(__NetBSD__) || defined(__OpenBSD__)
   // Specify the info we're looking for
   int mib[] = {
@@ -356,11 +354,9 @@ NS_DebugBreak(uint32_t aSeverity, const char* aStr, const char* aExpr,
 
 
   // errors on platforms without a debugdlg ring a bell on stderr
-#if !defined(XP_WIN)
   if (aSeverity != NS_DEBUG_WARNING) {
     fprintf(stderr, "\07");
   }
-#endif
 
 #ifdef ANDROID
   __android_log_print(ANDROID_LOG_INFO, "Gecko", "%s", buf.buffer);
@@ -398,9 +394,6 @@ NS_DebugBreak(uint32_t aSeverity, const char* aStr, const char* aExpr,
       }
 #endif  // MOZ_CRASHREPORTER
 
-#if defined(DEBUG) && defined(_WIN32)
-      RealBreak();
-#endif
 #if defined(DEBUG)
       nsTraceRefcnt::WalkTheStack(stderr);
 #endif
@@ -454,11 +447,7 @@ Abort(const char* aMsg)
 static void
 RealBreak()
 {
-#if defined(_WIN32)
-  ::DebugBreak();
-#elif defined(XP_MACOSX)
-  raise(SIGTRAP);
-#elif defined(__GNUC__) && (defined(__i386__) || defined(__i386) || defined(__x86_64__))
+#if defined(__GNUC__) && (defined(__i386__) || defined(__i386) || defined(__x86_64__))
   asm("int $3");
 #elif defined(__arm__)
   asm(
@@ -488,68 +477,7 @@ RealBreak()
 static void
 Break(const char* aMsg)
 {
-#if defined(_WIN32)
-  static int ignoreDebugger;
-  if (!ignoreDebugger) {
-    const char* shouldIgnoreDebugger = getenv("XPCOM_DEBUG_DLG");
-    ignoreDebugger =
-      1 + (shouldIgnoreDebugger && !strcmp(shouldIgnoreDebugger, "1"));
-  }
-  if ((ignoreDebugger == 2) || !::IsDebuggerPresent()) {
-    DWORD code = IDRETRY;
-
-    /* Create the debug dialog out of process to avoid the crashes caused by
-     * Windows events leaking into our event loop from an in process dialog.
-     * We do this by launching windbgdlg.exe (built in xpcom/windbgdlg).
-     * See http://bugzilla.mozilla.org/show_bug.cgi?id=54792
-     */
-    PROCESS_INFORMATION pi;
-    STARTUPINFOW si;
-    wchar_t executable[MAX_PATH];
-    wchar_t* pName;
-
-    memset(&pi, 0, sizeof(pi));
-
-    memset(&si, 0, sizeof(si));
-    si.cb          = sizeof(si);
-    si.wShowWindow = SW_SHOW;
-
-    // 2nd arg of CreateProcess is in/out
-    wchar_t* msgCopy = (wchar_t*)_alloca((strlen(aMsg) + 1) * sizeof(wchar_t));
-    wcscpy(msgCopy, NS_ConvertUTF8toUTF16(aMsg).get());
-
-    if (GetModuleFileNameW(GetModuleHandleW(L"xpcom.dll"), executable, MAX_PATH) &&
-        (pName = wcsrchr(executable, '\\')) != nullptr &&
-        wcscpy(pName + 1, L"windbgdlg.exe") &&
-        CreateProcessW(executable, msgCopy, nullptr, nullptr,
-                       false, DETACHED_PROCESS | NORMAL_PRIORITY_CLASS,
-                       nullptr, nullptr, &si, &pi)) {
-      WaitForSingleObject(pi.hProcess, INFINITE);
-      GetExitCodeProcess(pi.hProcess, &code);
-      CloseHandle(pi.hProcess);
-      CloseHandle(pi.hThread);
-    }
-
-    switch (code) {
-      case IDABORT:
-        //This should exit us
-        raise(SIGABRT);
-        //If we are ignored exit this way..
-        _exit(3);
-
-      case IDIGNORE:
-        return;
-    }
-  }
-
-  RealBreak();
-#elif defined(XP_MACOSX)
-  /* Note that we put this Mac OS X test above the GNUC/x86 test because the
-   * GNUC/x86 test is also true on Intel Mac OS X and we want the PPC/x86
-   * impls to be the same.
-   */
-  RealBreak();
-#elif defined(__GNUC__) && (defined(__i386__) || defined(__i386) || defined(__x86_64__))
+#if defined(__GNUC__) && (defined(__i386__) || defined(__i386) || defined(__x86_64__))
   RealBreak();
 #elif defined(__arm__) || defined(__aarch64__)
   RealBreak();
