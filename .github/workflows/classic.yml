@@ -1,10 +1,12 @@
 name: Build Classic for Testing
 
 on:
+  push:
+    branches:
+      - classic
   pull_request:
     branches:
       - classic
-  workflow_dispatch: null
 
 env:
   ENABLE_ARTIFACTS_MODE: "true"
@@ -14,7 +16,7 @@ jobs:
   build-linux:
     runs-on: ubuntu-18.04
     container:
-      image: ghcr.io/waterfoxco/waterfox_docker_img:latest
+      image: ghcr.io/waterfoxco/waterfox-classic_docker_img:latest
     steps:
       - name: Checkout branch
         uses: actions/checkout@v2
@@ -52,6 +54,7 @@ jobs:
         run: |
           brew update
           brew install autoconf@2.13 ccache make nasm yasm
+          rustup default 1.56.1-x86_64-apple-darwin
       - name: Get SDK
         run: |
           wget https://github.com/phracker/MacOSX-SDKs/releases/download/11.3/MacOSX10.12.sdk.tar.xz
@@ -78,7 +81,7 @@ jobs:
           path: ./dist/waterfox*.dmg
         if: env.ENABLE_ARTIFACTS_MODE == 'true'
   build-windows:
-    runs-on: windows-2016
+    runs-on: windows-2019
     steps:
       - name: Checkout branch
         uses: actions/checkout@v2
@@ -94,6 +97,7 @@ jobs:
           mkdir -p ~\\scoop\\buckets\\my-bucket
           Copy-Item -Path $env:GITHUB_WORKSPACE\\build\\github-actions\\mozilla-build.json -Destination ~\scoop\buckets\my-bucket
           scoop install my-bucket/mozilla-build --global
+          rustup default 1.56.1-pc-windows-msvc
       - name: Set system PATH variable
         shell: bash
         run: sed -i 's/SET PATH=.*/&;C:\\Rust\\.cargo\\bin;C:\\ProgramData\\scoop\\shims/g' /c/ProgramData/scoop/apps/mozilla-build/current/start-shell.bat
