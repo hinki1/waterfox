@@ -36,8 +36,6 @@
 <!ENTITY % privacyDTD SYSTEM "chrome://browser/locale/preferences/privacy.dtd">
 <!ENTITY % tabsDTD SYSTEM "chrome://browser/locale/preferences/tabs.dtd">
 <!ENTITY % searchDTD SYSTEM "chrome://browser/locale/preferences/search.dtd">
-<!ENTITY % syncBrandDTD SYSTEM "chrome://browser/locale/syncBrand.dtd">
-<!ENTITY % syncDTD SYSTEM "chrome://browser/locale/preferences/sync.dtd">
 <!ENTITY % securityDTD SYSTEM
   "chrome://browser/locale/preferences/security.dtd">
 <!ENTITY % containersDTD SYSTEM
@@ -69,8 +67,6 @@
 %privacyDTD;
 %tabsDTD;
 %searchDTD;
-%syncBrandDTD;
-%syncDTD;
 %securityDTD;
 %containersDTD;
 %sanitizeDTD;
@@ -158,16 +154,6 @@
         <image class="category-icon"/>
         <label class="category-name" flex="1">&panePrivacySecurity.title;</label>
       </richlistitem>
-
-      <richlistitem id="category-sync"
-                    class="category"
-                    value="paneSync"
-                    helpTopic="prefs-weave"
-                    tooltiptext="&paneSync1.title;"
-                    align="center">
-        <image class="category-icon"/>
-        <label class="category-name" flex="1">&paneSync1.title;</label>
-      </richlistitem>
     </richlistbox>
 
     <keyset>
@@ -190,7 +176,6 @@
 #include search.xul
 #include privacy.xul
 #include containers.xul
-#include sync.xul
         </prefpane>
       </vbox>
     </vbox>
