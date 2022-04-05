@@ -98,9 +98,6 @@ const log = Log.repository.getLogger("Sync.Engine.Extension-Storage");
 // A global that is fxAccounts, or null if (as on android) fxAccounts
 // isn't available.
 let _fxaService = null;
-if (AppConstants.platform != "android") {
-  _fxaService = fxAccounts;
-}
 
 class ServerKeyringDeleted extends Error {
   constructor() {
