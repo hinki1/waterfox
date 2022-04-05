@@ -93,13 +93,9 @@
     locale/browser/preferences/security.dtd           (%chrome/browser/preferences/security.dtd)
     locale/browser/preferences/selectBookmark.dtd     (%chrome/browser/preferences/selectBookmark.dtd)
     locale/browser/preferences/siteDataSettings.dtd     (%chrome/browser/preferences/siteDataSettings.dtd)
-    locale/browser/preferences-old/sync.dtd           (%chrome/browser/preferences-old/sync.dtd)
-    locale/browser/preferences/sync.dtd               (%chrome/browser/preferences/sync.dtd)
     locale/browser/preferences-old/tabs.dtd           (%chrome/browser/preferences-old/tabs.dtd)
     locale/browser/preferences/tabs.dtd               (%chrome/browser/preferences/tabs.dtd)
     locale/browser/preferences/translation.dtd        (%chrome/browser/preferences/translation.dtd)
-    locale/browser/syncBrand.dtd                (%chrome/browser/syncBrand.dtd)
-    locale/browser/syncSetup.properties         (%chrome/browser/syncSetup.properties)
 % resource search-plugins chrome://browser/locale/searchplugins/
 #if BUILD_FASTER
     locale/browser/searchplugins/               (searchplugins/*.xml)
