@@ -469,7 +469,6 @@ BrowserGlue.prototype = {
         this._sanitizer.onStartup();
         break;
       case "sync-ui-state:update":
-        this._updateFxaBadges();
         break;
       case "browser.application.restart":
         this._initPlaces(true);
@@ -2121,16 +2120,6 @@ BrowserGlue.prototype = {
     let nb = win.document.getElementById("global-notificationbox");
     nb.appendNotification(message, "flash-hang", null,
                           nb.PRIORITY_INFO_MEDIUM, buttons);
-  },
-
-  _updateFxaBadges() {
-    let state = UIState.get();
-    if (state.status == UIState.STATUS_LOGIN_FAILED ||
-        state.status == UIState.STATUS_NOT_VERIFIED) {
-      AppMenuNotifications.showBadgeOnlyNotification("fxa-needs-authentication");
-    } else {
-      AppMenuNotifications.removeNotification("fxa-needs-authentication");
-    }
   },
 
   // for XPCOM
