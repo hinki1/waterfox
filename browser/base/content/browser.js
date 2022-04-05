@@ -39,8 +39,7 @@ XPCOMUtils.defineLazyPreferenceGetter(this, "gPhotonStructure",
           ShortcutUtils:false, SimpleServiceDiscovery:false, SitePermissions:false,
           TabCrashHandler:false, TelemetryStopwatch:false,
           Translation:false, UITour:false, Utils:false, UpdateUtils:false,
-          Weave:false,
-          WebNavigationFrames: false, fxAccounts:false, gDevTools:false,
+          WebNavigationFrames: false, gDevTools:false,
           gDevToolsBrowser:false, webrtcUI:false, ZoomUI:false,
           Marionette:false, PageActions:false,
  */
@@ -87,9 +86,7 @@ XPCOMUtils.defineLazyPreferenceGetter(this, "gPhotonStructure",
   ["Translation", "resource:///modules/translation/Translation.jsm"],
   ["UpdateUtils", "resource://gre/modules/UpdateUtils.jsm"],
   ["Utils", "resource://gre/modules/sessionstore/Utils.jsm"],
-  ["Weave", "resource://services-sync/main.js"],
   ["WebNavigationFrames", "resource://gre/modules/WebNavigationFrames.jsm"],
-  ["fxAccounts", "resource://gre/modules/FxAccounts.jsm"],
   ["gDevTools", "resource://devtools/client/framework/gDevTools.jsm"],
   ["gDevToolsBrowser", "resource://devtools/client/framework/gDevTools.jsm"],
   ["webrtcUI", "resource:///modules/webrtcUI.jsm"],
@@ -125,8 +122,6 @@ XPCOMUtils.defineLazyScriptGetter(this, ["gGestureSupport", "gHistorySwipeAnimat
                                   "chrome://browser/content/browser-gestureSupport.js");
 XPCOMUtils.defineLazyScriptGetter(this, "gSafeBrowsing",
                                   "chrome://browser/content/browser-safebrowsing.js");
-XPCOMUtils.defineLazyScriptGetter(this, "gSync",
-                                  "chrome://browser/content/browser-sync.js");
 XPCOMUtils.defineLazyScriptGetter(this, "gBrowserThumbnails",
                                   "chrome://browser/content/browser-thumbnails.js");
 XPCOMUtils.defineLazyScriptGetter(this, ["setContextMenuContentData",
@@ -1674,11 +1669,6 @@ var gBrowserInit = {
       MenuTouchModeObserver.init();
     }
 
-    // initialize the sync UI
-    requestIdleCallback(() => {
-      gSync.init();
-    }, {timeout: 1000 * 5});
-
     if (AppConstants.MOZ_DATA_REPORTING)
       gDataNotificationInfoBar.init();
 
@@ -1813,8 +1803,6 @@ var gBrowserInit = {
     gHistorySwipeAnimation.uninit();
 
     FullScreen.uninit();
-
-    gSync.uninit();
 
     gExtensionsNotifications.uninit();
 
@@ -1976,11 +1964,6 @@ if (AppConstants.platform == "macosx") {
 
     // initialize the private browsing UI
     gPrivateBrowsingUI.init();
-
-    // initialize the sync UI
-    requestIdleCallback(() => {
-      gSync.init();
-    }, {timeout: 1000 * 5});
 
     if ((AppConstants.E10S_TESTING_ONLY) && (!AppConstants.isPlatformAndVersionAtMost("macosx", 13))) {
       gRemoteTabsUI.init();
@@ -6929,10 +6912,6 @@ function checkEmptyPageOrigin(browser = gBrowser.selectedBrowser,
   return ssm.isSystemPrincipal(contentPrincipal);
 }
 
-function BrowserOpenSyncTabs() {
-  gSync.openSyncedTabsPanel();
-}
-
 function ReportFalseDeceptiveSite() {
   let docURI = gBrowser.selectedBrowser.documentURI;
   let isPhishingPage =
@@ -8392,8 +8371,6 @@ var TabContextMenu = {
 
     this.contextTab.addEventListener("TabAttrModified", this);
     aPopupMenu.addEventListener("popuphiding", this);
-
-    gSync.updateTabContextMenu(aPopupMenu, this.contextTab);
   },
   handleEvent(aEvent) {
     switch (aEvent.type) {
