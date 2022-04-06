@@ -346,14 +346,6 @@ BrowserGlue.prototype = {
         break;
       case "weave:service:ready":
         break;
-      case "fxaccounts:onverified":
-        break;
-      case "fxaccounts:device_connected":
-        break;
-      case "fxaccounts:verify_login":
-        break;
-      case "fxaccounts:device_disconnected":
-        break;
       case "weave:engine:clients:display-uris":
         break;
       case "session-save":
@@ -389,10 +381,6 @@ BrowserGlue.prototype = {
         } else if (data == "smart-bookmarks-init") {
           this.ensurePlacesDefaultQueriesInitialized().then(() => {
             Services.obs.notifyObservers(null, "test-smart-bookmarks-done");
-          });
-        } else if (data == "mock-fxaccounts") {
-          Object.defineProperty(this, "fxAccounts", {
-            value: subject.wrappedJSObject
           });
         } else if (data == "mock-alerts-service") {
           Object.defineProperty(this, "AlertsService", {
@@ -493,10 +481,6 @@ BrowserGlue.prototype = {
       os.addObserver(this, "browser-lastwindow-close-granted");
     }
     os.addObserver(this, "weave:service:ready");
-    os.addObserver(this, "fxaccounts:onverified");
-    os.addObserver(this, "fxaccounts:device_connected");
-    os.addObserver(this, "fxaccounts:verify_login");
-    os.addObserver(this, "fxaccounts:device_disconnected");
     os.addObserver(this, "weave:engine:clients:display-uris");
     os.addObserver(this, "session-save");
     os.addObserver(this, "places-init-complete");
@@ -531,10 +515,6 @@ BrowserGlue.prototype = {
       os.removeObserver(this, "browser-lastwindow-close-granted");
     }
     os.removeObserver(this, "weave:service:ready");
-    os.removeObserver(this, "fxaccounts:onverified");
-    os.removeObserver(this, "fxaccounts:device_connected");
-    os.removeObserver(this, "fxaccounts:verify_login");
-    os.removeObserver(this, "fxaccounts:device_disconnected");
     os.removeObserver(this, "weave:engine:clients:display-uris");
     os.removeObserver(this, "session-save");
     if (this._bookmarksBackupIdleTime) {
