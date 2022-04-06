@@ -37,10 +37,6 @@ add_task(async function() {
   is(sidebar.getAttribute("sidebarcommand"), "viewHistorySidebar", "History sidebar loaded");
 
   await showSwitcherPanelPromise();
-  await clickSwitcherButton("#sidebar-switcher-tabs");
-  is(sidebar.getAttribute("sidebarcommand"), "viewTabsSidebar", "Tabs sidebar loaded");
-
-  await showSwitcherPanelPromise();
   await clickSwitcherButton("#sidebar-switcher-bookmarks");
   is(sidebar.getAttribute("sidebarcommand"), "viewBookmarksSidebar", "Bookmarks sidebar loaded");
 });
