@@ -52,6 +52,7 @@ ac_add_options --with-system-nspr
 mk_add_options AUTOCLOBBER=1
 mk_add_options MOZ_OBJDIR=objdir-classic
 
+export MOZ_SYSTEM_ZLIB=1
 export MOZ_GECKO_PROFILER=
 export MOZ_ENABLE_PROFILER_SPS=
 export MOZ_PROFILING=
