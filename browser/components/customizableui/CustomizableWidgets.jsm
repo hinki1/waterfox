@@ -403,10 +403,6 @@ const CustomizableWidgets = [
       // tooltiptext, but we only want the 'syncstatus' attribute for the
       // animation)
       let doc = aNode.ownerDocument;
-      let obnode = doc.createElementNS(kNSXUL, "observes");
-      obnode.setAttribute("element", "sync-status");
-      obnode.setAttribute("attribute", "syncstatus");
-      aNode.appendChild(obnode);
 
       // A somewhat complicated dance to format the mobilepromo label.
       let bundle = doc.getElementById("bundle_browser");
