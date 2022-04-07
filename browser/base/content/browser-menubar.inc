@@ -491,22 +491,6 @@
                         key="key_openAddons"
                         command="Tools:Addons"/>
 
-              <!-- only one of sync-setup, sync-syncnowitem or sync-reauthitem will be showing at once -->
-              <menuitem id="sync-setup"
-                        label="&syncSignIn.label;"
-                        accesskey="&syncSignIn.accesskey;"
-                        observes="sync-setup-state"
-                        oncommand="gSync.openPrefs('menubar')"/>
-              <menuitem id="sync-syncnowitem"
-                        label="&syncSyncNowItem.label;"
-                        accesskey="&syncSyncNowItem.accesskey;"
-                        observes="sync-syncnow-state"
-                        oncommand="gSync.doSync(event);"/>
-              <menuitem id="sync-reauthitem"
-                        label="&syncReAuthItem.label;"
-                        accesskey="&syncReAuthItem.accesskey;"
-                        observes="sync-reauth-state"
-                        oncommand="gSync.openSignInAgainPage('menubar');"/>
               <menuseparator id="devToolsSeparator"/>
               <menu id="webDeveloperMenu"
                     label="&webDeveloperMenu.label;"
