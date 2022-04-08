@@ -22,8 +22,8 @@ Build-Depends:
 #
  libhunspell-dev (>= 1.5),
 # libltdl-dev,
-# libnspr4-dev (>= 4.16),
-# libnss3-dev (>= 3.32.1),
+ libnspr4-dev (>= 4.21.1),
+ libnss3-dev (>= 3.44.4),
 # libomp-dev,
  libpango1.0-dev,
 # pulseaudio reicht nicht.
