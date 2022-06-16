@@ -1,3 +1,9 @@
+waterfox (2022.04) buster; urgency=medium
+
+  * new upstream version 2022.04-classic
+
+ -- Matthias Hinkfoth <hinki@abwesend.de>  Thu, 16 Jun 2022 20:58:48 +0200
+
 waterfox (2022.02) buster; urgency=medium
 
   * new upstream version 2022.02-classic
