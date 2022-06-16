@@ -29,7 +29,3 @@ BROWSER_CHROME_MANIFESTS += [
     'preferences/browser.ini',
     'primaryUI/browser.ini',
 ]
-
-TEST_DIRS += [
-    'mozscreenshots/extension',
-]
