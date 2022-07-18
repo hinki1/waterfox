@@ -627,12 +627,14 @@ static bool
 array_length_setter(JSContext* cx, HandleObject obj, HandleId id, MutableHandleValue vp,
                     ObjectOpResult& result)
 {
+    MOZ_ASSERT(id == NameToId(cx->names().length));
+
     if (!obj->is<ArrayObject>()) {
         // This array .length property was found on the prototype
         // chain. Ideally the setter should not have been called, but since
         // we're here, do an impression of SetPropertyByDefining.
         const Class* clasp = obj->getClass();
-        return DefineProperty(cx, obj, cx->names().length, vp,
+        return DefineProperty(cx, obj, id, vp,
                               clasp->getGetProperty(), clasp->getSetProperty(),
                               JSPROP_ENUMERATE, result);
     }
@@ -4021,6 +4023,43 @@ js::NewValuePair(JSContext* cx, const Value& val1, const Value& val2, MutableHan
         return false;
     rval.setObject(*aobj);
     return true;
+}
+
+bool js::intrinsic_newList(JSContext* cx, unsigned argc, js::Value* vp) {
+  CallArgs args = CallArgsFromVp(argc, vp);
+  MOZ_ASSERT(args.length() == 0);
+
+  size_t length = 0;
+  gc::AllocKind allocKind = GuessArrayGCKind(length);
+  MOZ_ASSERT(CanBeFinalizedInBackground(allocKind, &ArrayObject::class_));
+  allocKind = GetBackgroundAllocKind(allocKind);
+
+  RootedObjectGroup group(cx, ObjectGroup::defaultNewGroup(cx, &ArrayObject::class_,
+                                                           TaggedProto()));
+  if (!group)
+    return false;
+
+  /*
+   * Get a shape with zero fixed slots, regardless of the size class.
+   * See JSObject::createArray.
+   */
+  RootedShape shape(
+      cx, EmptyShape::getInitialShape(cx, &ArrayObject::class_,
+                                       TaggedProto(), gc::AllocKind::OBJECT0));
+  if (!shape) {
+    return false;
+  }
+
+  gc::InitialHeap heap = gc::InitialHeap::DefaultHeap;
+  AutoSetNewObjectMetadata metadata(cx);
+  RootedArrayObject list(cx, ArrayObject::createArray(cx, allocKind, heap,
+                                                      shape, group, length, metadata));
+  if (!list || !AddLengthProperty(cx, list)) {
+    return false;
+  }
+
+  args.rval().setObject(*list);
+  return true;
 }
 
 #ifdef DEBUG

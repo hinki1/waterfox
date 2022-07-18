@@ -108,7 +108,6 @@ DIRS += [
     '/tools/code-coverage',
     '/tools/power',
     '/tools/profiler',
-    '/tools/memory-profiler',
     '/xpfe/components',
 ]
 
@@ -129,7 +128,6 @@ if CONFIG['MOZ_PREF_EXTENSIONS']:
 DIRS += [
     '/devtools',
     '/toolkit/library',
-    '/toolkit/library/StaticXULComponentsEnd',
     '/services',
     '/startupcache',
     '/js/ductwork/debugger',

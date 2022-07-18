@@ -374,7 +374,6 @@
     macro(SpeciesConstructor, SpeciesConstructor, "SpeciesConstructor") \
     macro(stack, stack, "stack") \
     macro(star, star, "*") \
-    macro(starDefaultStar, starDefaultStar, "*default*") \
     macro(StarGeneratorNext, StarGeneratorNext, "StarGeneratorNext") \
     macro(StarGeneratorReturn, StarGeneratorReturn, "StarGeneratorReturn") \
     macro(StarGeneratorThrow, StarGeneratorThrow, "StarGeneratorThrow") \
@@ -400,6 +399,10 @@
     macro(timestamp, timestamp, "timestamp") \
     macro(timeZone, timeZone, "timeZone") \
     macro(timeZoneName, timeZoneName, "timeZoneName") \
+    macro(trimEnd, trimEnd, "trimEnd") \
+    macro(trimLeft, trimLeft, "trimLeft") \
+    macro(trimRight, trimRight, "trimRight") \
+    macro(trimStart, trimStart, "trimStart") \
     macro(toGMTString, toGMTString, "toGMTString") \
     macro(toISOString, toISOString, "toISOString") \
     macro(toJSON, toJSON, "toJSON") \
