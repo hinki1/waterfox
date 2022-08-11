@@ -839,7 +839,8 @@ ParserBase::ParserBase(JSContext* cx, LifoAlloc& alloc,
                        const ReadOnlyCompileOptions& options,
                        const char16_t* chars, size_t length,
                        bool foldConstants,
-                       UsedNameTracker& usedNames)
+                       UsedNameTracker& usedNames,
+                       ParseGoal parseGoal)
   : context(cx),
     alloc(alloc),
     anyChars(cx, options, thisForCtor()),
@@ -853,7 +854,8 @@ ParserBase::ParserBase(JSContext* cx, LifoAlloc& alloc,
     checkOptionsCalled(false),
 #endif
     isUnexpectedEOF_(false),
-    awaitHandling_(AwaitIsName)
+    awaitHandling_(AwaitIsName),
+    parseGoal_(uint8_t(parseGoal))
 {
     cx->frontendCollectionPool().addActiveCompilation();
     tempPoolMark = alloc.mark();
@@ -880,8 +882,9 @@ Parser<ParseHandler, CharT>::Parser(JSContext* cx, LifoAlloc& alloc,
                                     bool foldConstants,
                                     UsedNameTracker& usedNames,
                                     SyntaxParser* syntaxParser,
-                                    LazyScript* lazyOuterFunction)
-  : ParserBase(cx, alloc, options, chars, length, foldConstants, usedNames),
+                                    LazyScript* lazyOuterFunction,
+                                    ParseGoal parseGoal)
+  : ParserBase(cx, alloc, options, chars, length, foldConstants, usedNames, parseGoal),
     AutoGCRooter(cx, PARSER),
     syntaxParser_(syntaxParser),
     tokenStream(cx, options, chars, length),
@@ -2519,7 +2522,8 @@ Parser<SyntaxParseHandler, char16_t>::finishFunction(bool isStandaloneFunction /
                                           pc->innerFunctionsForLazy, versionNumber(),
                                           funbox->bufStart, funbox->bufEnd,
                                           funbox->toStringStart,
-                                          funbox->startLine, funbox->startColumn);
+                                          funbox->startLine, funbox->startColumn,
+                                          parseGoal());
     if (!lazy)
         return false;
 
@@ -4445,8 +4449,6 @@ Parser<ParseHandler, CharT>::bindingInitializer(Node lhs, DeclarationKind kind,
     if (!rhs)
         return null();
 
-    handler.checkAndSetIsDirectRHSAnonFunction(rhs);
-
     Node assign = handler.newAssignment(ParseNodeKind::Assign, lhs, rhs);
     if (!assign)
         return null();
@@ -4826,8 +4828,6 @@ Parser<ParseHandler, CharT>::declarationPattern(DeclarationKind declKind, TokenK
     if (!init)
         return null();
 
-    handler.checkAndSetIsDirectRHSAnonFunction(init);
-
     return handler.newAssignment(ParseNodeKind::Assign, pattern, init);
 }
 
@@ -4850,8 +4850,6 @@ Parser<ParseHandler, CharT>::initializerInNameDeclaration(Node binding,
                                   yieldHandling, TripledotProhibited);
     if (!initializer)
         return false;
-
-    handler.checkAndSetIsDirectRHSAnonFunction(initializer);
 
     if (forHeadKind && initialDeclaration) {
         bool isForIn, isForOf;
@@ -5292,6 +5290,22 @@ Parser<SyntaxParseHandler, char16_t>::importDeclaration()
     return SyntaxParseHandler::NodeFailure;
 }
 
+template <class ParseHandler, typename CharT>
+typename ParseHandler::Node
+Parser<ParseHandler, CharT>::importDeclarationOrImportExpr(YieldHandling yieldHandling)
+{
+    MOZ_ASSERT(anyChars.isCurrentTokenType(TokenKind::Import));
+
+    TokenKind tt;
+    if (!tokenStream.peekToken(&tt))
+        return null();
+
+    if (tt == TokenKind::Dot || tt == TokenKind::LeftParen)
+        return expressionStatement(yieldHandling);
+
+    return importDeclaration();
+}
+
 template<>
 bool
 Parser<FullParseHandler, char16_t>::checkExportedName(JSAtom* exportName)
@@ -5317,14 +5331,92 @@ Parser<SyntaxParseHandler, char16_t>::checkExportedName(JSAtom* exportName)
 
 template<>
 bool
+Parser<FullParseHandler, char16_t>::checkExportedNamesForArrayBinding(ParseNode* pn)
+{
+    MOZ_ASSERT(pn->isKind(ParseNodeKind::Array));
+    MOZ_ASSERT(pn->isArity(PN_LIST));
+
+    for (ParseNode* node = pn->pn_head; node; node = node->pn_next) {
+        if (node->isKind(ParseNodeKind::Elision))
+            continue;
+
+        ParseNode* binding;
+        if (node->isKind(ParseNodeKind::Spread))
+            binding = node->pn_kid;
+        else if (node->isKind(ParseNodeKind::Assign))
+            binding = node->pn_left;
+        else
+            binding = node;
+
+        if (!checkExportedNamesForDeclaration(binding))
+            return false;
+    }
+
+    return true;
+}
+
+template<>
+bool
+Parser<SyntaxParseHandler, char16_t>::checkExportedNamesForArrayBinding(Node node)
+{
+    MOZ_ALWAYS_FALSE(abortIfSyntaxParser());
+    return false;
+}
+
+template<>
+bool
+Parser<FullParseHandler, char16_t>::checkExportedNamesForObjectBinding(ParseNode* pn)
+{
+    MOZ_ASSERT(pn->isKind(ParseNodeKind::Object));
+    MOZ_ASSERT(pn->isArity(PN_LIST));
+
+    for (ParseNode* node = pn->pn_head; node; node = node->pn_next) {
+        MOZ_ASSERT(node->isKind(ParseNodeKind::MutateProto) ||
+                   node->isKind(ParseNodeKind::Colon) ||
+                   node->isKind(ParseNodeKind::Shorthand) ||
+                   node->isKind(ParseNodeKind::Spread));
+
+        ParseNode* target;
+        if (node->isKind(ParseNodeKind::Spread)) {
+            target = node->pn_kid;
+        } else {
+            if (node->isKind(ParseNodeKind::MutateProto))
+                target = node->pn_kid;
+            else
+                target = node->pn_right;
+
+            if (target->isKind(ParseNodeKind::Assign))
+                target = target->pn_left;
+        }
+
+        if (!checkExportedNamesForDeclaration(target))
+            return false;
+    }
+
+    return true;
+}
+
+template<>
+bool
+Parser<SyntaxParseHandler, char16_t>::checkExportedNamesForObjectBinding(Node node)
+{
+    MOZ_ALWAYS_FALSE(abortIfSyntaxParser());
+    return false;
+}
+
+template<>
+bool
 Parser<FullParseHandler, char16_t>::checkExportedNamesForDeclaration(ParseNode* node)
 {
-    MOZ_ASSERT(node->isArity(PN_LIST));
-    for (ParseNode* binding = node->pn_head; binding; binding = binding->pn_next) {
-        if (binding->isKind(ParseNodeKind::Assign))
-            binding = binding->pn_left;
-        MOZ_ASSERT(binding->isKind(ParseNodeKind::Name));
-        if (!checkExportedName(binding->pn_atom))
+    if (node->isKind(ParseNodeKind::Name)) {
+        if (!checkExportedName(node->pn_atom))
+            return false;
+    } else if (node->isKind(ParseNodeKind::Array)) {
+        if (!checkExportedNamesForArrayBinding(node))
+            return false;
+    } else {
+        MOZ_ASSERT(node->isKind(ParseNodeKind::Object));
+        if (!checkExportedNamesForObjectBinding(node))
             return false;
     }
 
@@ -5334,6 +5426,32 @@ Parser<FullParseHandler, char16_t>::checkExportedNamesForDeclaration(ParseNode* 
 template<>
 bool
 Parser<SyntaxParseHandler, char16_t>::checkExportedNamesForDeclaration(Node node)
+{
+    MOZ_ALWAYS_FALSE(abortIfSyntaxParser());
+    return false;
+}
+
+template<>
+bool
+Parser<FullParseHandler, char16_t>::checkExportedNamesForDeclarationList(ParseNode* node)
+{
+    MOZ_ASSERT(node->isArity(PN_LIST));
+    for (ParseNode* binding = node->pn_head; binding; binding = binding->pn_next) {
+        if (binding->isKind(ParseNodeKind::Assign))
+            binding = binding->pn_left;
+        else
+            MOZ_ASSERT(binding->isKind(ParseNodeKind::Name));
+
+        if (!checkExportedNamesForDeclaration(binding))
+            return false;
+    }
+
+    return true;
+}
+
+template<>
+bool
+Parser<SyntaxParseHandler, char16_t>::checkExportedNamesForDeclarationList(Node node)
 {
     MOZ_ALWAYS_FALSE(abortIfSyntaxParser());
     return false;
@@ -5612,7 +5730,7 @@ Parser<ParseHandler, CharT>::exportVariableStatement(uint32_t begin)
         return null();
     if (!matchOrInsertSemicolon())
         return null();
-    if (!checkExportedNamesForDeclaration(kid))
+    if (!checkExportedNamesForDeclarationList(kid))
         return null();
 
     Node node = handler.newExportDeclaration(kid, TokenPos(begin, pos().end));
@@ -5692,7 +5810,7 @@ Parser<ParseHandler, CharT>::exportLexicalDeclaration(uint32_t begin, Declaratio
     Node kid = lexicalDeclaration(YieldIsName, kind);
     if (!kid)
         return null();
-    if (!checkExportedNamesForDeclaration(kid))
+    if (!checkExportedNamesForDeclarationList(kid))
         return null();
 
     Node node = handler.newExportDeclaration(kid, TokenPos(begin, pos().end));
@@ -5770,8 +5888,6 @@ Parser<ParseHandler, CharT>::exportDefaultAssignExpr(uint32_t begin)
     Node kid = assignExpr(InAllowed, YieldIsName, TripledotProhibited);
     if (!kid)
         return null();
-
-    handler.checkAndSetIsDirectRHSAnonFunction(kid);
 
     if (!matchOrInsertSemicolon())
         return null();
@@ -7297,18 +7413,16 @@ Parser<ParseHandler, CharT>::classDefinition(YieldHandling yieldHandling,
 
         bool isStatic = false;
         if (tt == TokenKind::Static) {
-            if (!tokenStream.peekToken(&tt))
-                return null();
-            if (tt == TokenKind::RightCurly) {
-                tokenStream.consumeKnownToken(tt);
-                error(JSMSG_UNEXPECTED_TOKEN, "property name", TokenKindToDesc(tt));
+            if (!tokenStream.peekToken(&tt)) {
                 return null();
             }
 
-            if (tt != TokenKind::LeftParen)
+            if (tt != TokenKind::LeftParen && tt != TokenKind::Assign &&
+                tt != TokenKind::Semi && tt != TokenKind::RightCurly) {
                 isStatic = true;
-            else
+            } else {
                 anyChars.ungetToken();
+            }
         } else {
             anyChars.ungetToken();
         }
@@ -7378,8 +7492,6 @@ Parser<ParseHandler, CharT>::classDefinition(YieldHandling yieldHandling,
                                    propType, funName);
         if (!fn)
             return null();
-
-        handler.checkAndSetIsDirectRHSAnonFunction(fn);
 
         AccessorType atype = ToAccessorType(propType);
         if (!handler.addClassMethodDefinition(classMethods, propName, fn, atype, isStatic))
@@ -7678,7 +7790,7 @@ Parser<ParseHandler, CharT>::statement(YieldHandling yieldHandling)
 
       // ImportDeclaration (only inside modules)
       case TokenKind::Import:
-        return importDeclaration();
+        return importDeclarationOrImportExpr(yieldHandling);
 
       // ExportDeclaration (only inside modules)
       case TokenKind::Export:
@@ -7870,7 +7982,7 @@ Parser<ParseHandler, CharT>::statementListItem(YieldHandling yieldHandling,
 
       // ImportDeclaration (only inside modules)
       case TokenKind::Import:
-        return importDeclaration();
+        return importDeclarationOrImportExpr(yieldHandling);
 
       // ExportDeclaration (only inside modules)
       case TokenKind::Export:
@@ -8327,6 +8439,15 @@ Parser<ParseHandler, CharT>::assignExpr(InHandling inHandling, YieldHandling yie
       case TokenKind::Assign:       kind = ParseNodeKind::Assign;       break;
       case TokenKind::AddAssign:    kind = ParseNodeKind::AddAssign;    break;
       case TokenKind::SubAssign:    kind = ParseNodeKind::SubAssign;    break;
+      case TokenKind::CoalesceAssign:
+          kind = ParseNodeKind::CoalesceAssignExpr;
+          break;
+      case TokenKind::OrAssign:
+          kind = ParseNodeKind::OrAssignExpr;
+          break;
+      case TokenKind::AndAssign:
+          kind = ParseNodeKind::AndAssignExpr;
+          break;
       case TokenKind::BitOrAssign:  kind = ParseNodeKind::BitOrAssign;  break;
       case TokenKind::BitXorAssign: kind = ParseNodeKind::BitXorAssign; break;
       case TokenKind::BitAndAssign: kind = ParseNodeKind::BitAndAssign; break;
@@ -8371,11 +8492,24 @@ Parser<ParseHandler, CharT>::assignExpr(InHandling inHandling, YieldHandling yie
     } else if (handler.isPropertyAccess(lhs)) {
         // Permitted: no additional testing/fixup needed.
     } else if (handler.isFunctionCall(lhs)) {
-        if (!strictModeErrorAt(exprPos.begin, JSMSG_BAD_LEFTSIDE_OF_ASS))
+        // We don't have to worry about backward compatibility issues with the new
+        // compound assignment operators, so we always throw here. Also that way we
+        // don't have to worry if |f() &&= expr| should always throw an error or
+        // only if |f()| returns true.
+        if (kind == ParseNodeKind::CoalesceAssignExpr ||
+            kind == ParseNodeKind::OrAssignExpr ||
+            kind == ParseNodeKind::AndAssignExpr) {
+            errorAt(exprPos.begin, JSMSG_BAD_LEFTSIDE_OF_ASS);
             return null();
+        }
 
-        if (possibleError)
+        if (!strictModeErrorAt(exprPos.begin, JSMSG_BAD_LEFTSIDE_OF_ASS)) {
+            return null();
+        }
+
+        if (possibleError) {
             possibleError->setPendingDestructuringErrorAt(exprPos, JSMSG_BAD_DESTRUCT_TARGET);
+        }
     } else {
         errorAt(exprPos.begin, JSMSG_BAD_LEFTSIDE_OF_ASS);
         return null();
@@ -8387,9 +8521,6 @@ Parser<ParseHandler, CharT>::assignExpr(InHandling inHandling, YieldHandling yie
     Node rhs = assignExpr(inHandling, yieldHandling, TripledotProhibited);
     if (!rhs)
         return null();
-
-    if (kind == ParseNodeKind::Assign)
-        handler.checkAndSetIsDirectRHSAnonFunction(rhs);
 
     return handler.newAssignment(kind, lhs, rhs);
 }
@@ -9156,6 +9287,10 @@ Parser<ParseHandler, CharT>::memberExpr(YieldHandling yieldHandling,
         if (!thisName)
             return null();
         lhs = handler.newSuperBase(thisName, pos());
+        if (!lhs)
+            return null();
+    } else if (tt == TokenKind::Import) {
+        lhs = importExpr(yieldHandling, allowCallSyntax);
         if (!lhs)
             return null();
     } else {
@@ -10159,16 +10294,11 @@ Parser<ParseHandler, CharT>::objectLiteral(YieldHandling yieldHandling,
                 if (!propExpr)
                     return null();
 
-                handler.checkAndSetIsDirectRHSAnonFunction(propExpr);
-
                 if (!checkDestructuringAssignmentElement(propExpr, exprPos, &possibleErrorInner,
                                                          possibleError))
                 {
                     return null();
                 }
-
-                if (foldConstants && !FoldConstants(context, &propExpr, this))
-                    return null();
 
                 if (propAtom == context->names().proto) {
                     if (seenPrototypeMutation) {
@@ -10186,18 +10316,25 @@ Parser<ParseHandler, CharT>::objectLiteral(YieldHandling yieldHandling,
                     }
                     seenPrototypeMutation = true;
 
-                    // Note: this occurs *only* if we observe TokenKind::Colon!
-                    // Only __proto__: v mutates [[Prototype]].  Getters, setters,
-                    // method/generator definitions, computed property name
-                    // versions of all of these, and shorthands do not.
+                    if (foldConstants && !FoldConstants(context, &propExpr, this))
+                        return null();
+
+                    // This occurs *only* if we observe PropertyType::Normal!
+                    // Only |__proto__: v| mutates [[Prototype]]. Getters,
+                    // setters, method/generator definitions, computed
+                    // property name versions of all of these, and shorthands
+                    // do not.
                     if (!handler.addPrototypeMutation(literal, namePos.begin, propExpr))
                         return null();
                 } else {
-                    if (!handler.isConstant(propExpr))
-                        handler.setListFlag(literal, PNX_NONCONST);
-
-                    if (!handler.addPropertyDefinition(literal, propName, propExpr))
+                    Node propDef = handler.newPropertyDefinition(propName, propExpr);
+                    if (!propDef)
                         return null();
+
+                    if (foldConstants && !FoldConstants(context, &propDef, this))
+                        return null();
+
+                    handler.addPropertyDefinition(literal, propDef);
                 }
             } else if (propType == PropertyType::Shorthand) {
                 /*
@@ -10265,8 +10402,6 @@ Parser<ParseHandler, CharT>::objectLiteral(YieldHandling yieldHandling,
                 if (!rhs)
                     return null();
 
-                handler.checkAndSetIsDirectRHSAnonFunction(rhs);
-
                 Node propExpr = handler.newAssignment(ParseNodeKind::Assign, lhs, rhs);
                 if (!propExpr)
                     return null();
@@ -10288,8 +10423,6 @@ Parser<ParseHandler, CharT>::objectLiteral(YieldHandling yieldHandling,
                 Node fn = methodDefinition(namePos.begin, propType, funName);
                 if (!fn)
                     return null();
-
-                handler.checkAndSetIsDirectRHSAnonFunction(fn);
 
                 AccessorType atype = ToAccessorType(propType);
                 if (!handler.addObjectMethodDefinition(literal, propName, fn, atype))
@@ -10423,6 +10556,52 @@ Parser<ParseHandler, CharT>::tryNewTarget(Node &newTarget)
 
     newTarget = handler.newNewTarget(newHolder, targetHolder);
     return !!newTarget;
+}
+
+template <class ParseHandler, typename CharT>
+typename ParseHandler::Node
+Parser<ParseHandler, CharT>::importExpr(YieldHandling yieldHandling, bool allowCallSyntax)
+{
+    MOZ_ASSERT(anyChars.isCurrentTokenType(TokenKind::Import));
+
+    Node importHolder = handler.newPosHolder(pos());
+    if (!importHolder)
+        return null();
+
+    TokenKind next;
+    if (!tokenStream.getToken(&next))
+        return null();
+
+    if (next == TokenKind::Dot) {
+        if (!tokenStream.getToken(&next))
+            return null();
+        if (next != TokenKind::Meta) {
+            error(JSMSG_UNEXPECTED_TOKEN, "meta", TokenKindToDesc(next));
+            return null();
+        }
+
+        if (parseGoal() != ParseGoal::Module) {
+            errorAt(pos().begin, JSMSG_IMPORT_META_OUTSIDE_MODULE);
+            return null();
+        }
+
+        Node metaHolder = handler.newPosHolder(pos());
+        if (!metaHolder)
+            return null();
+
+        return handler.newImportMeta(importHolder, metaHolder);
+    } else if (next == TokenKind::LeftParen && allowCallSyntax) {
+        Node arg = assignExpr(InAllowed, yieldHandling, TripledotProhibited);
+        if (!arg)
+            return null();
+
+        MUST_MATCH_TOKEN_MOD(TokenKind::RightParen, TokenStream::Operand, JSMSG_PAREN_AFTER_ARGS);
+
+        return handler.newCallImport(importHolder, arg);
+    } else {
+        error(JSMSG_UNEXPECTED_TOKEN_NO_EXPECT, TokenKindToDesc(next));
+        return null();
+    }
 }
 
 template <class ParseHandler, typename CharT>

@@ -30,6 +30,34 @@ enum class ScriptKind {
 };
 
 /*
+ * Some options used when fetching script resources. This only loosely
+ * corresponds to HTML's "script fetch options".
+ *
+ * These are common to all modules in a module graph, and hence a single
+ * instance is shared by all ModuleLoadRequest objects in a graph.
+ */
+
+class ScriptFetchOptions
+{
+  ~ScriptFetchOptions();
+
+public:
+  NS_INLINE_DECL_CYCLE_COLLECTING_NATIVE_REFCOUNTING(ScriptFetchOptions)
+  NS_DECL_CYCLE_COLLECTION_NATIVE_CLASS(ScriptFetchOptions)
+
+  ScriptFetchOptions(mozilla::CORSMode aCORSMode,
+                     mozilla::net::ReferrerPolicy aReferrerPolicy,
+                     nsIScriptElement* aElement,
+                     nsIPrincipal* aTriggeringPrincipal);
+
+  const mozilla::CORSMode mCORSMode;
+  const mozilla::net::ReferrerPolicy mReferrerPolicy;
+  bool mIsPreload;
+  nsCOMPtr<nsIScriptElement> mElement;
+  nsCOMPtr<nsIPrincipal> mTriggeringPrincipal;
+};
+
+/*
  * A class that handles loading and evaluation of <script> elements.
  */
 
@@ -48,12 +76,10 @@ protected:
 public:
   ScriptLoadRequest(ScriptKind aKind,
                     nsIURI* aURI,
-                    nsIScriptElement* aElement,
+                    ScriptFetchOptions* aFetchOptions,
                     uint32_t aVersion,
-                    mozilla::CORSMode aCORSMode,
                     const SRIMetadata &aIntegrity,
-                    nsIURI* aReferrer,
-                    mozilla::net::ReferrerPolicy aReferrerPolicy);
+                    nsIURI* aReferrer);
 
   NS_DECL_CYCLE_COLLECTING_ISUPPORTS
   NS_DECL_CYCLE_COLLECTION_SCRIPT_HOLDER_CLASS(ScriptLoadRequest)
@@ -68,17 +94,17 @@ public:
   void FireScriptAvailable(nsresult aResult)
   {
     bool isInlineClassicScript = mIsInline && !IsModuleRequest();
-    mElement->ScriptAvailable(aResult, mElement, isInlineClassicScript, mURI,
+    Element()->ScriptAvailable(aResult, Element(), isInlineClassicScript, mURI,
                               mLineNo);
   }
   void FireScriptEvaluated(nsresult aResult)
   {
-    mElement->ScriptEvaluated(aResult, mElement, mIsInline);
+    Element()->ScriptEvaluated(aResult, Element(), mIsInline);
   }
 
-  bool IsPreload()
-  {
-    return mElement == nullptr;
+  bool IsPreload() const {
+    MOZ_ASSERT_IF(mFetchOptions->mIsPreload, !Element());
+    return mFetchOptions->mIsPreload;
   }
 
   virtual void Cancel();
@@ -181,6 +207,48 @@ public:
     return true;
   }
 
+  mozilla::CORSMode CORSMode() const
+  {
+    return mFetchOptions->mCORSMode;
+  }
+  mozilla::net::ReferrerPolicy ReferrerPolicy() const
+  {
+    return mFetchOptions->mReferrerPolicy;
+  }
+  nsIScriptElement* Element() const
+  {
+    return mFetchOptions->mElement;
+  }
+  nsIPrincipal* TriggeringPrincipal() const
+  {
+    return mFetchOptions->mTriggeringPrincipal;
+  }
+
+  // Make this request a preload (speculative) request.
+  void SetIsPreloadRequest() {
+    MOZ_ASSERT(!Element());
+    MOZ_ASSERT(!IsPreload());
+    mFetchOptions->mIsPreload = true;
+  }
+
+  // Make a preload request into an actual load request for the given element.
+  void SetIsLoadRequest(nsIScriptElement* aElement) {
+    MOZ_ASSERT(aElement);
+    MOZ_ASSERT(!Element());
+    MOZ_ASSERT(IsPreload());
+    mFetchOptions->mElement = aElement;
+    mFetchOptions->mIsPreload = false;
+  }
+
+  FromParser GetParserCreated() const {
+    nsIScriptElement* element = Element();
+    if (!element) {
+      return NOT_FROM_PARSER;
+    }
+    return element->GetParserCreated();
+  }
+
+  void SetScript(JSScript* aScript);
 
   void MaybeCancelOffThreadScript();
   void DropBytecodeCacheReferences();
@@ -188,12 +256,11 @@ public:
   using super::getNext;
   using super::isInList;
 
-  const ScriptKind mKind;
-  nsCOMPtr<nsIScriptElement> mElement;
-  bool mScriptFromHead;   // Synchronous head script block loading of other non js/css content.
+  const ScriptKind mKind; // Whether this is a classic script or a module script.
+  ScriptMode mScriptMode; // Whether this is a blocking, defer or async script.
   Progress mProgress;     // Are we still waiting for a load to complete?
   DataType mDataType;     // Does this contain Source or Bytecode?
-  ScriptMode mScriptMode; // Whether this is a blocking, defer or async script.
+  bool mScriptFromHead;   // Synchronous head script block loading of other non js/css content.
   bool mIsInline;         // Is the script inline or loaded?
   bool mHasSourceMapURL;  // Does the HTTP header have a source map url?
   bool mInDeferList;      // True if we live in mDeferRequests.
@@ -204,6 +271,9 @@ public:
   bool mWasCompiledOMT;   // True if the script has been compiled off main thread.
   bool mIsTracking;       // True if the script comes from a source on our tracking protection list.
   void* mOffThreadToken;  // Off-thread parsing token.
+
+  RefPtr<ScriptFetchOptions> mFetchOptions;
+
   nsString mSourceMapURL; // Holds source map url for loaded scripts
 
   // Holds the top-level JSScript that corresponds to the current source, once
@@ -224,14 +294,15 @@ public:
   nsCOMPtr<nsIPrincipal> mOriginPrincipal;
   nsAutoCString mURL;     // Keep the URI's filename alive during off thread parsing.
   int32_t mLineNo;
-  const mozilla::CORSMode mCORSMode;
   const SRIMetadata mIntegrity;
   const nsCOMPtr<nsIURI> mReferrer;
-  const mozilla::net::ReferrerPolicy mReferrerPolicy;
 
   // Holds the Cache information, which is used to register the bytecode
   // on the cache entry, such that we can load it the next time.
   nsCOMPtr<nsICacheInfoChannel> mCacheInfo;
+
+  // The base URL used for resolving relative module imports.
+  nsCOMPtr<nsIURI> mBaseURL;
 };
 
 class ScriptLoadRequestList : private mozilla::LinkedList<ScriptLoadRequest>
