@@ -1843,6 +1843,24 @@ class LComputeThis : public LInstructionHelper<BOX_PIECES, BOX_PIECES, 0>
     }
 };
 
+class LImplicitThis : public LCallInstructionHelper<BOX_PIECES, 1, 0>
+{
+  public:
+    LIR_HEADER(ImplicitThis)
+
+    explicit LImplicitThis(const LAllocation& env) {
+        setOperand(0, env);
+    }
+
+    const LAllocation* env() {
+        return getOperand(0);
+    }
+
+    MImplicitThis* mir() const {
+        return mir_->toImplicitThis();
+    }
+};
+
 // Writes a typed argument for a function call to the frame's argument vector.
 class LStackArgT : public LInstructionHelper<0, 1, 0>
 {
@@ -5018,6 +5036,33 @@ class LClassConstructor : public LCallInstructionHelper<1, 0, 0>
     }
 };
 
+class LModuleMetadata : public LCallInstructionHelper<1, 0, 0>
+{
+  public:
+    LIR_HEADER(ModuleMetadata)
+
+    const MModuleMetadata* mir() const {
+        return mir_->toModuleMetadata();
+    }
+};
+
+class LDynamicImport : public LCallInstructionHelper<1, BOX_PIECES, 0>
+{
+  public:
+    LIR_HEADER(DynamicImport)
+
+    static const size_t SpecifierIndex = 0;
+
+    explicit LDynamicImport(const LBoxAllocation& specifier)
+    {
+        setBoxOperand(SpecifierIndex, specifier);
+    }
+
+    const MDynamicImport* mir() const {
+        return mir_->toDynamicImport();
+    }
+};
+
 class LLambdaForSingleton : public LCallInstructionHelper<1, 1, 0>
 {
   public:
@@ -6667,6 +6712,28 @@ class LCallGetIntrinsicValue : public LCallInstructionHelper<BOX_PIECES, 0, 0>
     }
 };
 
+class LGetPropSuperCacheV : public LInstructionHelper<BOX_PIECES, 1 + 2 * BOX_PIECES, 0>
+{
+  public:
+    LIR_HEADER(GetPropSuperCacheV)
+
+    static const size_t Receiver = 1;
+    static const size_t Id = Receiver + BOX_PIECES;
+
+    LGetPropSuperCacheV(const LAllocation& obj, const LBoxAllocation& receiver,
+                        const LBoxAllocation& id) {
+        setOperand(0, obj);
+        setBoxOperand(Receiver, receiver);
+        setBoxOperand(Id, id);
+    }
+    const LAllocation* obj() {
+        return getOperand(0);
+    }
+    const MGetPropSuperCache* mir() const {
+        return mir_->toGetPropSuperCache();
+    }
+};
+
 // Patchable jump to stubs generated for a GetProperty cache, which loads a
 // boxed value.
 class LGetPropertyCacheV : public LInstructionHelper<BOX_PIECES, 2 * BOX_PIECES, 1>
@@ -7088,6 +7155,34 @@ class LFunctionEnvironment : public LInstructionHelper<1, 1, 0>
         setOperand(0, function);
     }
     const LAllocation* function() {
+        return getOperand(0);
+    }
+};
+
+class LHomeObject : public LInstructionHelper<1, 1, 0>
+{
+  public:
+    LIR_HEADER(HomeObject)
+
+    explicit LHomeObject(const LAllocation& function) {
+        setOperand(0, function);
+    }
+    const LAllocation* function() {
+        return getOperand(0);
+    }
+};
+
+class LHomeObjectSuperBase : public LInstructionHelper<1, 1, 0>
+{
+  public:
+    LIR_HEADER(HomeObjectSuperBase)
+
+    explicit LHomeObjectSuperBase(const LAllocation& homeObject)
+    {
+        setOperand(0, homeObject);
+    }
+
+    const LAllocation* homeObject() {
         return getOperand(0);
     }
 };
