@@ -37,6 +37,7 @@ namespace mozilla {
 namespace dom {
 
 class AutoJSAPI;
+class LoadedScript;
 class ModuleLoadRequest;
 class ModuleScript;
 class ScriptLoadHandler;
@@ -342,6 +343,46 @@ public:
    */
   void LoadEventFired();
 
+  /**
+   * Destroy and prevent the ScriptLoader or the ScriptLoadRequests from owning
+   * any references to the JSScript or to the Request which might be used for
+   * caching the encoded bytecode.
+   */
+  void Destroy()
+  {
+    GiveUpBytecodeEncoding();
+  }
+
+  /**
+   * Implement the HostResolveImportedModule abstract operation.
+   *
+   * Resolve a module specifier string and look this up in the module
+   * map, returning the result. This is only called for previously
+   * loaded modules and always succeeds.
+   *
+   * @param aReferencingPrivate A JS::Value which is either undefined
+   *                            or contains a LoadedScript private pointer.
+   * @param aSpecifier The module specifier.
+   * @param aModuleOut This is set to the module found.
+   */
+  static void ResolveImportedModule(JSContext* aCx,
+                                    JS::Handle<JS::Value> aReferencingPrivate,
+                                    JS::Handle<JSString*> aSpecifier,
+                                    JS::MutableHandle<JSObject*> aModuleOut);
+
+  void StartDynamicImport(ModuleLoadRequest* aRequest);
+  void FinishDynamicImport(ModuleLoadRequest* aRequest, nsresult aResult);
+  void FinishDynamicImport(JSContext* aCx, ModuleLoadRequest* aRequest,
+                           nsresult aResult);
+
+  /*
+   * Get the currently active script. This is used as the initiating script when
+   * executing timeout handler scripts.
+   */
+  static LoadedScript* GetActiveScript(JSContext* aCx);
+
+  nsIDocument* GetDocument() const { return mDocument; }
+
   /*
    * Clear the map of loaded modules. Called when a Document object is reused
    * for a different global.
@@ -351,9 +392,12 @@ public:
  private:
   virtual ~ScriptLoader();
 
+  void EnsureModuleHooksInitialized();
+
   ScriptLoadRequest* CreateLoadRequest(ScriptKind aKind,
                                        nsIURI* aURI,
                                        nsIScriptElement* aElement,
+                                       nsIPrincipal* aTriggeringPrincipal,
                                        uint32_t aVersion,
                                        mozilla::CORSMode aCORSMode,
                                        const SRIMetadata& aIntegrity,
@@ -371,11 +415,13 @@ public:
 
   bool ProcessExternalScript(nsIScriptElement* aElement,
                              ScriptKind aScriptKind,
+                             uint32_t aVersion,
                              nsAutoString aTypeAttr,
                              nsIContent* aScriptContent);
 
   bool ProcessInlineScript(nsIScriptElement* aElement,
-                           ScriptKind aScriptKind);
+                           ScriptKind aScriptKind,
+                           uint32_t aVersion);
 
   ScriptLoadRequest* LookupPreloadRequest(nsIScriptElement* aElement,
                                           ScriptKind aScriptKind);
@@ -452,6 +498,7 @@ public:
 
   nsresult AttemptAsyncScriptCompile(ScriptLoadRequest* aRequest);
   nsresult ProcessRequest(ScriptLoadRequest* aRequest);
+  void ProcessDynamicImport(ModuleLoadRequest* aRequest);
   nsresult CompileOffThreadOrProcessRequest(ScriptLoadRequest* aRequest);
   void FireScriptAvailable(nsresult aResult,
                            ScriptLoadRequest* aRequest);
@@ -514,8 +561,9 @@ public:
   ModuleScript* GetFetchedModule(nsIURI* aURL) const;
 
   friend JSObject*
-  HostResolveImportedModule(JSContext* aCx, JS::Handle<JSObject*> aModule,
-                          JS::Handle<JSString*> aSpecifier);
+  HostResolveImportedModule(JSContext* aCx,
+                            JS::Handle<JS::Value> aReferencingPrivate,
+                            JS::Handle<JSString*> aSpecifier);
 
   // Returns wether we should save the bytecode of this script after the
   // execution of the script.
@@ -533,6 +581,11 @@ public:
   RefPtr<mozilla::GenericPromise>
   StartFetchingModuleAndDependencies(ModuleLoadRequest* aParent, nsIURI* aURI);
 
+  nsresult InitDebuggerDataForModuleTree(JSContext* aCx,
+                                         ModuleLoadRequest* aRequest);
+
+  void RunScriptWhenSafe(ScriptLoadRequest* aRequest);
+
   nsIDocument* mDocument;                   // [WEAK]
   nsCOMArray<nsIScriptLoaderObserver> mObservers;
   ScriptLoadRequestList mNonAsyncExternalScriptInsertedRequests;
@@ -542,6 +595,7 @@ public:
   ScriptLoadRequestList mLoadedAsyncRequests;
   ScriptLoadRequestList mDeferRequests;
   ScriptLoadRequestList mXSLTRequests;
+  ScriptLoadRequestList mDynamicImportRequests;
   RefPtr<ScriptLoadRequest> mParserBlockingRequest;
 
   // List of script load request that are holding a buffer which has to be saved
@@ -586,6 +640,7 @@ public:
   bool mDocumentParsingDone;
   bool mBlockingDOMContentLoaded;
   bool mLoadEventFired;
+  bool mGiveUpEncoding;
 
   // Module map
   nsRefPtrHashtable<nsURIHashKey, mozilla::GenericPromise::Private> mFetchingModules;
@@ -594,6 +649,7 @@ public:
   nsCOMPtr<nsIConsoleReportCollector> mReporter;
 
   // Logging
+ public:
   static LazyLogModule gCspPRLog;
   static LazyLogModule gScriptLoaderLog;
 };

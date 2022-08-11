@@ -137,6 +137,7 @@ ContainsHoistedDeclaration(JSContext* cx, ParseNode* node, bool* result)
       case ParseNodeKind::ExportSpec:
       case ParseNodeKind::Export:
       case ParseNodeKind::ExportBatchSpec:
+      case ParseNodeKind::CallImport:
         *result = false;
         return true;
 
@@ -356,6 +357,9 @@ ContainsHoistedDeclaration(JSContext* cx, ParseNode* node, bool* result)
       case ParseNodeKind::Assign:
       case ParseNodeKind::AddAssign:
       case ParseNodeKind::SubAssign:
+      case ParseNodeKind::CoalesceAssignExpr:
+      case ParseNodeKind::OrAssignExpr:
+      case ParseNodeKind::AndAssignExpr:
       case ParseNodeKind::BitOrAssign:
       case ParseNodeKind::BitXorAssign:
       case ParseNodeKind::BitAndAssign:
@@ -406,6 +410,7 @@ ContainsHoistedDeclaration(JSContext* cx, ParseNode* node, bool* result)
       case ParseNodeKind::ClassMethodList:
       case ParseNodeKind::ClassNames:
       case ParseNodeKind::NewTarget:
+      case ParseNodeKind::ImportMeta:
       case ParseNodeKind::PosHolder:
       case ParseNodeKind::SuperCall:
       case ParseNodeKind::SuperBase:
@@ -1834,6 +1839,9 @@ Fold(JSContext* cx, ParseNode** pnp, Parser<FullParseHandler, char16_t>& parser,
       case ParseNodeKind::Assign:
       case ParseNodeKind::AddAssign:
       case ParseNodeKind::SubAssign:
+      case ParseNodeKind::CoalesceAssignExpr:
+      case ParseNodeKind::OrAssignExpr:
+      case ParseNodeKind::AndAssignExpr:
       case ParseNodeKind::BitOrAssign:
       case ParseNodeKind::BitAndAssign:
       case ParseNodeKind::BitXorAssign:
@@ -1858,10 +1866,16 @@ Fold(JSContext* cx, ParseNode** pnp, Parser<FullParseHandler, char16_t>& parser,
                Fold(cx, &pn->pn_right, parser, inGenexpLambda);
 
       case ParseNodeKind::NewTarget:
+      case ParseNodeKind::ImportMeta:
         MOZ_ASSERT(pn->isArity(PN_BINARY));
         MOZ_ASSERT(pn->pn_left->isKind(ParseNodeKind::PosHolder));
         MOZ_ASSERT(pn->pn_right->isKind(ParseNodeKind::PosHolder));
         return true;
+
+      case ParseNodeKind::CallImport:
+        MOZ_ASSERT(pn->isArity(PN_BINARY));
+        MOZ_ASSERT(pn->pn_left->isKind(ParseNodeKind::PosHolder));
+        return Fold(cx, &pn->pn_right, parser, inGenexpLambda);
 
       case ParseNodeKind::ClassNames:
         MOZ_ASSERT(pn->isArity(PN_BINARY));

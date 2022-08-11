@@ -537,6 +537,9 @@ class IonBuilder
     AbortReasonOr<Ok> jsop_runonce();
     AbortReasonOr<Ok> jsop_rest();
     AbortReasonOr<Ok> jsop_not();
+    AbortReasonOr<Ok> jsop_superbase();
+    AbortReasonOr<Ok> jsop_getprop_super(PropertyName* name);
+    AbortReasonOr<Ok> jsop_getelem_super();
     AbortReasonOr<Ok> jsop_getprop(PropertyName* name);
     AbortReasonOr<Ok> jsop_setprop(PropertyName* name);
     AbortReasonOr<Ok> jsop_delprop(PropertyName* name);
@@ -583,6 +586,9 @@ class IonBuilder
     AbortReasonOr<Ok> jsop_checkiscallable(uint8_t kind);
     AbortReasonOr<Ok> jsop_checkobjcoercible();
     AbortReasonOr<Ok> jsop_pushcallobj();
+    AbortReasonOr<Ok> jsop_implicitthis(PropertyName* name);
+    AbortReasonOr<Ok> jsop_importmeta();
+    AbortReasonOr<Ok> jsop_dynamic_import();
 
     /* Inlining. */
 
