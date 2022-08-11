@@ -451,6 +451,17 @@ LIRGenerator::visitComputeThis(MComputeThis* ins)
 }
 
 void
+LIRGenerator::visitImplicitThis(MImplicitThis* ins)
+{
+    MDefinition* env = ins->envChain();
+    MOZ_ASSERT(env->type() == MIRType::Object);
+
+    LImplicitThis* lir = new(alloc()) LImplicitThis(useRegisterAtStart(env));
+    defineReturn(lir, ins);
+    assignSafepoint(lir, ins);
+}
+
+void
 LIRGenerator::visitArrowNewTarget(MArrowNewTarget* ins)
 {
     MOZ_ASSERT(ins->type() == MIRType::Value);
@@ -2530,6 +2541,23 @@ LIRGenerator::visitClassConstructor(MClassConstructor* ins)
 }
 
 void
+LIRGenerator::visitModuleMetadata(MModuleMetadata* ins)
+{
+    LModuleMetadata* lir = new(alloc()) LModuleMetadata();
+    defineReturn(lir, ins);
+    assignSafepoint(lir, ins);
+}
+
+void
+LIRGenerator::visitDynamicImport(MDynamicImport* ins)
+{
+    LDynamicImport* lir =
+        new (alloc()) LDynamicImport(useBoxAtStart(ins->specifier()));
+    defineReturn(lir, ins);
+    assignSafepoint(lir, ins);
+}
+
+void
 LIRGenerator::visitLambda(MLambda* ins)
 {
     if (ins->info().singletonType || ins->info().useSingletonForClone) {
@@ -2678,6 +2706,23 @@ void
 LIRGenerator::visitFunctionEnvironment(MFunctionEnvironment* ins)
 {
     define(new(alloc()) LFunctionEnvironment(useRegisterAtStart(ins->function())), ins);
+}
+
+void
+LIRGenerator::visitHomeObject(MHomeObject* ins)
+{
+    define(new(alloc()) LHomeObject(useRegisterAtStart(ins->function())), ins);
+}
+
+void
+LIRGenerator::visitHomeObjectSuperBase(MHomeObjectSuperBase* ins)
+{
+    MOZ_ASSERT(ins->homeObject()->type() == MIRType::Object);
+    MOZ_ASSERT(ins->type() == MIRType::Object);
+
+    auto lir = new(alloc()) LHomeObjectSuperBase(useRegister(ins->homeObject()));
+    define(lir, ins);
+    assignSafepoint(lir, ins);
 }
 
 void
@@ -3755,6 +3800,24 @@ LIRGenerator::visitCallGetIntrinsicValue(MCallGetIntrinsicValue* ins)
 {
     LCallGetIntrinsicValue* lir = new(alloc()) LCallGetIntrinsicValue();
     defineReturn(lir, ins);
+    assignSafepoint(lir, ins);
+}
+
+void
+LIRGenerator::visitGetPropSuperCache(MGetPropSuperCache* ins)
+{
+    MDefinition* obj = ins->object();
+    MDefinition* receiver = ins->receiver();
+    MDefinition* id = ins->idval();
+
+    gen->setNeedsOverrecursedCheck();
+
+    bool useConstId = id->type() == MIRType::String || id->type() == MIRType::Symbol;
+
+    auto* lir = new(alloc()) LGetPropSuperCacheV(useRegister(obj),
+                                                 useBoxOrTyped(receiver),
+                                                 useBoxOrTypedOrConstant(id, useConstId));
+    defineBox(lir, ins);
     assignSafepoint(lir, ins);
 }
 

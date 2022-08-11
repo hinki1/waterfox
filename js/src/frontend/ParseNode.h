@@ -123,6 +123,8 @@ class ObjectBox;
     F(SuperBase) \
     F(SuperCall) \
     F(SetThis) \
+    F(ImportMeta) \
+    F(CallImport) \
     \
     /* Unary operators. */ \
     F(TypeOfName) \
@@ -172,6 +174,9 @@ class ObjectBox;
     F(Assign) \
     F(AddAssign) \
     F(SubAssign) \
+    F(CoalesceAssignExpr) \
+    F(OrAssignExpr) \
+    F(AndAssignExpr) \
     F(BitOrAssign) \
     F(BitXorAssign) \
     F(BitAndAssign) \
@@ -328,6 +333,9 @@ IsTypeofKind(ParseNodeKind kind)
  * Assign   binary      pn_left: lvalue, pn_right: rvalue
  * AddAssign,   binary  pn_left: lvalue, pn_right: rvalue
  * SubAssign,           pn_op: JSOP_ADD for +=, etc.
+ * CoalesceAssignExpr,
+ * OrAssignExpr,
+ * AndAssignExpr,
  * BitOrAssign,
  * BitXorAssign,
  * BitAndAssign,
@@ -638,7 +646,6 @@ class ParseNode
                        FullParseHandler* handler, ParseContext* pc);
 
     inline PropertyName* name() const;
-    inline JSAtom* atom() const;
 
     ParseNode* expr() const {
         MOZ_ASSERT(pn_arity == PN_NAME || pn_arity == PN_CODE);
@@ -978,6 +985,12 @@ struct CodeNode : public ParseNode
         MOZ_ASSERT(!pn_objbox);
     }
 
+    static bool test(const ParseNode& node) {
+        bool match = node.isKind(ParseNodeKind::Function) || node.isKind(ParseNodeKind::Module);
+        MOZ_ASSERT_IF(match, node.isArity(PN_CODE));
+        return match;
+    }
+
   public:
 #ifdef DEBUG
   void dump(GenericPrinter& out, int indent);
@@ -991,6 +1004,10 @@ struct NameNode : public ParseNode
     {
         pn_atom = atom;
         pn_expr = nullptr;
+    }
+
+    static bool test(const ParseNode& node) {
+        return node.isArity(PN_NAME);
     }
 
 #ifdef DEBUG
@@ -1236,6 +1253,10 @@ class PropertyAccessBase : public BinaryNode
         return *pn_u.binary.left;
     }
 
+    ParseNode& key() const {
+        return *pn_u.binary.right;
+    }
+
     static bool test(const ParseNode& node) {
         bool match = node.isKind(ParseNodeKind::Dot) ||
                      node.isKind(ParseNodeKind::OptionalDot);
@@ -1298,6 +1319,10 @@ class PropertyByValueBase : public ParseNode
 
     ParseNode& expression() const {
         return *pn_u.binary.left;
+    }
+
+    ParseNode& key() const {
+        return *pn_u.binary.right;
     }
 
     static bool test(const ParseNode& node) {
