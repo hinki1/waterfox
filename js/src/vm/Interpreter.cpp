@@ -34,6 +34,7 @@
 #include "jsstr.h"
 
 #include "builtin/Eval.h"
+#include "builtin/ModuleObject.h"
 #include "jit/AtomicOperations.h"
 #include "jit/BaselineJIT.h"
 #include "jit/Ion.h"
@@ -1066,10 +1067,14 @@ PopEnvironment(JSContext* cx, EnvironmentIter& ei)
         if (ei.scope().hasEnvironment())
             ei.initialFrame().popOffEnvironmentChain<VarEnvironmentObject>();
         break;
+      case ScopeKind::Module:
+        if (MOZ_UNLIKELY(cx->compartment()->isDebuggee())) {
+            DebugEnvironments::onPopModule(cx, ei);
+        }
+        break;
       case ScopeKind::Eval:
       case ScopeKind::Global:
       case ScopeKind::NonSyntactic:
-      case ScopeKind::Module:
         break;
       case ScopeKind::WasmInstance:
       case ScopeKind::WasmFunction:
@@ -1650,7 +1655,6 @@ GetSuperEnvFunction(JSContext* cx, InterpreterRegs& regs)
     }
     MOZ_CRASH("unexpected env chain for GetSuperEnvFunction");
 }
-
 
 /*
  * As an optimization, the interpreter creates a handful of reserved Rooted<T>
@@ -2921,8 +2925,8 @@ END_CASE(JSOP_GETELEM)
 
 CASE(JSOP_GETELEM_SUPER)
 {
-    ReservedRooted<Value> rval(&rootValue0, REGS.sp[-3]);
-    ReservedRooted<Value> receiver(&rootValue1, REGS.sp[-2]);
+    ReservedRooted<Value> receiver(&rootValue1, REGS.sp[-3]);
+    ReservedRooted<Value> rval(&rootValue0, REGS.sp[-2]);
     ReservedRooted<JSObject*> obj(&rootObject1, &REGS.sp[-1].toObject());
 
     MutableHandleValue res = REGS.stackHandleAt(-3);
@@ -2964,8 +2968,8 @@ CASE(JSOP_STRICTSETELEM_SUPER)
     static_assert(JSOP_SETELEM_SUPER_LENGTH == JSOP_STRICTSETELEM_SUPER_LENGTH,
                   "setelem-super and strictsetelem-super must be the same size");
 
-    ReservedRooted<Value> index(&rootValue1, REGS.sp[-4]);
-    ReservedRooted<Value> receiver(&rootValue0, REGS.sp[-3]);
+    ReservedRooted<Value> receiver(&rootValue0, REGS.sp[-4]);
+    ReservedRooted<Value> index(&rootValue1, REGS.sp[-3]);
     ReservedRooted<JSObject*> obj(&rootObject1, &REGS.sp[-2].toObject());
     HandleValue value = REGS.stackHandleAt(-1);
 
@@ -3673,7 +3677,7 @@ CASE(JSOP_SETFUNNAME)
     FunctionPrefixKind prefixKind = FunctionPrefixKind(GET_UINT8(REGS.pc));
     ReservedRooted<Value> name(&rootValue0, REGS.sp[-1]);
     ReservedRooted<JSFunction*> fun(&rootFunction0, &REGS.sp[-2].toObject().as<JSFunction>());
-    if (!SetFunctionNameIfNoOwnName(cx, fun, name, prefixKind))
+    if (!SetFunctionName(cx, fun, name, prefixKind))
         goto error;
 
     REGS.sp--;
@@ -4193,19 +4197,18 @@ END_CASE(JSOP_OBJWITHPROTO)
 
 CASE(JSOP_INITHOMEOBJECT)
 {
-    unsigned skipOver = GET_UINT8(REGS.pc);
-    MOZ_ASSERT(REGS.stackDepth() >= skipOver + 2);
+    MOZ_ASSERT(REGS.stackDepth() >= 2);
 
     /* Load the function to be initialized */
-    ReservedRooted<JSFunction*> func(&rootFunction0, &REGS.sp[-1].toObject().as<JSFunction>());
+    ReservedRooted<JSFunction*> func(&rootFunction0, &REGS.sp[-2].toObject().as<JSFunction>());
     MOZ_ASSERT(func->allowSuperProperty());
 
     /* Load the home object */
-    ReservedRooted<JSObject*> obj(&rootObject0);
-    obj = &REGS.sp[int(-2 - skipOver)].toObject();
+    ReservedRooted<JSObject*> obj(&rootObject0, &REGS.sp[-1].toObject());
     MOZ_ASSERT(obj->is<PlainObject>() || obj->is<JSFunction>());
 
     func->setExtendedSlot(FunctionExtended::METHOD_HOMEOBJECT_SLOT, ObjectValue(*obj));
+    REGS.sp--;
 }
 END_CASE(JSOP_INITHOMEOBJECT)
 
@@ -4230,6 +4233,36 @@ CASE(JSOP_NEWTARGET)
     PUSH_COPY(REGS.fp()->newTarget());
     MOZ_ASSERT(REGS.sp[-1].isObject() || REGS.sp[-1].isUndefined());
 END_CASE(JSOP_NEWTARGET)
+
+CASE(JSOP_IMPORTMETA)
+{
+    ReservedRooted<JSObject*> module(&rootObject0, GetModuleObjectForScript(script));
+    MOZ_ASSERT(module);
+
+    JSObject* metaObject = GetOrCreateModuleMetaObject(cx, module);
+    if (!metaObject)
+        goto error;
+
+    PUSH_OBJECT(*metaObject);
+}
+END_CASE(JSOP_IMPORTMETA)
+
+CASE(JSOP_DYNAMIC_IMPORT)
+{
+    ReservedRooted<JSObject*> referencingScriptSource(&rootObject0);
+    referencingScriptSource = script->sourceObject();
+
+    ReservedRooted<Value> specifier(&rootValue1);
+    POP_COPY_TO(specifier);
+
+    JSObject* promise =
+        StartDynamicModuleImport(cx, referencingScriptSource, specifier);
+    if (!promise)
+        goto error;
+
+    PUSH_OBJECT(*promise);
+}
+END_CASE(JSOP_DYNAMIC_IMPORT)
 
 CASE(JSOP_SUPERFUN)
 {
@@ -4421,7 +4454,13 @@ js::Lambda(JSContext* cx, HandleFunction fun, HandleObject parent)
 {
     MOZ_ASSERT(!fun->isArrow());
 
-    JSFunction* clone = CloneFunctionObjectIfNotSingleton(cx, fun, parent);
+    JSFunction* clone;
+    if (fun->isNative()) {
+        MOZ_ASSERT(IsAsmJSModule(fun));
+        clone = CloneAsmJSModuleFunction(cx, fun);
+    } else {
+        clone = CloneFunctionObjectIfNotSingleton(cx, fun, parent);
+    }
     if (!clone)
         return nullptr;
 

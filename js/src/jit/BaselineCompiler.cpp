@@ -1796,7 +1796,7 @@ BaselineCompiler::emit_JSOP_LAMBDA_ARROW()
 
 typedef bool (*SetFunNameFn)(JSContext*, HandleFunction, HandleValue, FunctionPrefixKind);
 static const VMFunction SetFunNameInfo =
-    FunctionInfo<SetFunNameFn>(js::SetFunctionNameIfNoOwnName, "SetFunName");
+    FunctionInfo<SetFunNameFn>(js::SetFunctionName, "SetFunName");
 
 bool
 BaselineCompiler::emit_JSOP_SETFUNNAME()
@@ -2325,21 +2325,21 @@ BaselineCompiler::emit_JSOP_GETELEM()
 bool
 BaselineCompiler::emit_JSOP_GETELEM_SUPER()
 {
-    // Index -> R1, Receiver -> R2, Object -> R0
-    frame.popRegsAndSync(1);
-    masm.loadValue(frame.addressOfStackValue(frame.peek(-1)), R2);
-    masm.loadValue(frame.addressOfStackValue(frame.peek(-2)), R1);
+    // Store obj in the scratch slot.
+    storeValue(frame.peek(-1), frame.addressOfScratchValue(), R2);
+    frame.pop();
 
-    // Keep receiver on stack.
-    frame.popn(2);
-    frame.push(R2);
-    frame.syncStack(0);
+    // Keep receiver and index in R0 and R1.
+    frame.popRegsAndSync(2);
+
+    // Keep obj on the stack.
+    frame.pushScratchValue();
 
     ICGetElem_Fallback::Compiler stubCompiler(cx, /* hasReceiver = */ true);
     if (!emitOpIC(stubCompiler.getStub(&stubSpace_)))
         return false;
 
-    frame.pop();
+    frame.pop(); // This value is also popped in InitFromBailout.
     frame.push(R0);
     return true;
 }
@@ -2387,10 +2387,10 @@ BaselineCompiler::emit_JSOP_SETELEM_SUPER()
 {
     bool strict = IsCheckStrictOp(JSOp(*pc));
 
-    // Incoming stack is |propval, receiver, obj, rval|. We need to shuffle
+    // Incoming stack is |receiver, propval, obj, rval|. We need to shuffle
     // stack to leave rval when operation is complete.
 
-    // Pop rval into R0, then load propval into R1 and replace with rval.
+    // Pop rval into R0, then load receiver into R1 and replace with rval.
     frame.popRegsAndSync(1);
     masm.loadValue(frame.addressOfStackValue(frame.peek(-3)), R1);
     masm.storeValue(R0, frame.addressOfStackValue(frame.peek(-3)));
@@ -2398,10 +2398,10 @@ BaselineCompiler::emit_JSOP_SETELEM_SUPER()
     prepareVMCall();
 
     pushArg(Imm32(strict));
-    masm.loadValue(frame.addressOfStackValue(frame.peek(-2)), R2);
-    pushArg(R2); // receiver
+    pushArg(R1); // receiver
     pushArg(R0); // rval
-    pushArg(R1); // propval
+    masm.loadValue(frame.addressOfStackValue(frame.peek(-2)), R0);
+    pushArg(R0); // propval
     masm.unboxObject(frame.addressOfStackValue(frame.peek(-1)), R0.scratchReg());
     pushArg(R0.scratchReg()); // obj
 
@@ -3590,7 +3590,7 @@ BaselineCompiler::emit_JSOP_OPTIMIZE_SPREADCALL()
 
 typedef bool (*ImplicitThisFn)(JSContext*, HandleObject, HandlePropertyName,
                                MutableHandleValue);
-static const VMFunction ImplicitThisInfo =
+const VMFunction jit::ImplicitThisInfo =
     FunctionInfo<ImplicitThisFn>(ImplicitThisOperation, "ImplicitThisOperation");
 
 bool
@@ -5019,12 +5019,8 @@ BaselineCompiler::emit_JSOP_CHECKCLASSHERITAGE()
 bool
 BaselineCompiler::emit_JSOP_INITHOMEOBJECT()
 {
-    frame.syncStack(0);
-
-    // Load HomeObject off stack
-    unsigned skipOver = GET_UINT8(pc);
-    MOZ_ASSERT(frame.stackDepth() >= skipOver + 2);
-    masm.loadValue(frame.addressOfStackValue(frame.peek(-2 - skipOver)), R0);
+    // Load HomeObject in R0.
+    frame.popRegsAndSync(1);
 
     // Load function off stack
     Register func = R2.scratchReg();
@@ -5148,6 +5144,55 @@ BaselineCompiler::emit_JSOP_DERIVEDCONSTRUCTOR()
     pushArg(ImmGCPtr(script));
     if (!callVM(MakeDefaultConstructorInfo))
         return false;
+
+    masm.tagValue(JSVAL_TYPE_OBJECT, ReturnReg, R0);
+    frame.push(R0);
+    return true;
+}
+
+typedef JSObject* (*GetOrCreateModuleMetaObjectFn)(JSContext*, HandleObject);
+static const VMFunction GetOrCreateModuleMetaObjectInfo =
+    FunctionInfo<GetOrCreateModuleMetaObjectFn>(js::GetOrCreateModuleMetaObject,
+                                                "GetOrCreateModuleMetaObject");
+
+bool
+BaselineCompiler::emit_JSOP_IMPORTMETA()
+{
+    RootedModuleObject module(cx, GetModuleObjectForScript(script));
+    MOZ_ASSERT(module);
+
+    frame.syncStack(0);
+
+    prepareVMCall();
+    pushArg(ImmGCPtr(module));
+    if (!callVM(GetOrCreateModuleMetaObjectInfo)) {
+        return false;
+    }
+
+    masm.tagValue(JSVAL_TYPE_OBJECT, ReturnReg, R0);
+    frame.push(R0);
+    return true;
+}
+
+typedef JSObject* (*StartDynamicModuleImportFn)(JSContext*, HandleObject, HandleValue);
+static const VMFunction StartDynamicModuleImportInfo =
+    FunctionInfo<StartDynamicModuleImportFn>(js::StartDynamicModuleImport,
+                                                "StartDynamicModuleImport");
+
+bool
+BaselineCompiler::emit_JSOP_DYNAMIC_IMPORT()
+{
+    RootedObject referencingScriptSource(cx, script->sourceObject());
+
+    // Put specifier value in R0.
+    frame.popRegsAndSync(1);
+
+    prepareVMCall();
+    pushArg(R0);
+    pushArg(ImmGCPtr(referencingScriptSource));
+    if (!callVM(StartDynamicModuleImportInfo)) {
+        return false;
+    }
 
     masm.tagValue(JSVAL_TYPE_OBJECT, ReturnReg, R0);
     frame.push(R0);

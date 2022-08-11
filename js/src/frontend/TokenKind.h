@@ -126,6 +126,7 @@
     macro(From,         "'from'") \
     macro(Get,          "'get'") \
     macro(Let,          "'let'") \
+    macro(Meta,         "'meta'") \
     macro(Of,           "'of'") \
     macro(Set,          "'set'") \
     macro(Static,       "'static'") \
@@ -223,6 +224,9 @@
     range(AssignmentStart, Assign) \
     macro(AddAssign,    "'+='") \
     macro(SubAssign,    "'-='") \
+    macro(CoalesceAssign, "'\?\?='") /* avoid trigraphs warning */ \
+    macro(OrAssign,     "'||='") \
+    macro(AndAssign,    "'&&='") \
     macro(BitOrAssign,  "'|='") \
     macro(BitXorAssign, "'^='") \
     macro(BitAndAssign, "'&='") \
