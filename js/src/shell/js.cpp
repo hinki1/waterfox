@@ -86,8 +86,6 @@
 #include "threading/LockGuard.h"
 #include "threading/Thread.h"
 #include "vm/ArgumentsObject.h"
-#include "vm/AsyncFunction.h"
-#include "vm/AsyncIteration.h"
 #include "vm/Compression.h"
 #include "vm/Debugger.h"
 #include "vm/HelperThreads.h"
@@ -133,7 +131,17 @@ enum JSShellExitCode {
     EXITCODE_TIMEOUT            = 6
 };
 
-static const size_t gStackChunkSize = 8192;
+// Define use of application-specific slots on the shell's global object.
+enum GlobalAppSlot
+{
+    GlobalAppSlotModuleLoadHook,           // Shell-specific; load a module graph
+    GlobalAppSlotModuleResolveHook,        // HostResolveImportedModule
+    GlobalAppSlotModuleMetadataHook,       // HostPopulateImportMeta
+    GlobalAppSlotModuleDynamicImportHook,  // HostImportModuleDynamically
+    GlobalAppSlotCount
+};
+static_assert(GlobalAppSlotCount <= JSCLASS_GLOBAL_APPLICATION_SLOTS,
+              "Too many applications slots defined for shell global");
 
 /*
  * Note: This limit should match the stack limit set by the browser in
@@ -389,8 +397,7 @@ ShellContext::ShellContext(JSContext* cx)
     quitting(false),
     readLineBufPos(0),
     errFilePtr(nullptr),
-    outFilePtr(nullptr),
-    moduleResolveHook(cx)
+    outFilePtr(nullptr)
 {}
 
 ShellContext*
@@ -570,6 +577,32 @@ EnvironmentPreparer::invoke(HandleObject scope, Closure& closure)
         return;
 }
 
+static bool
+RegisterScriptPathWithModuleLoader(JSContext* cx, HandleScript script, const char* filename)
+{
+    // Set the private value associated with a script to a object containing the
+    // script's filename so that the module loader can use it to resolve
+    // relative imports.
+
+    RootedString path(cx, JS_NewStringCopyZ(cx, filename));
+    if (!path) {
+        return false;
+    }
+
+    RootedObject infoObject(cx, JS_NewPlainObject(cx));
+    if (!infoObject) {
+        return false;
+    }
+
+    RootedValue pathValue(cx, StringValue(path));
+    if (!JS_DefineProperty(cx, infoObject, "path", pathValue, 0)) {
+        return false;
+    }
+
+    JS::SetScriptPrivate(script, ObjectValue(*infoObject));
+    return true;
+}
+
 static MOZ_MUST_USE bool
 RunFile(JSContext* cx, const char* filename, FILE* file, bool compileOnly)
 {
@@ -600,6 +633,10 @@ RunFile(JSContext* cx, const char* filename, FILE* file, bool compileOnly)
         if (!JS::Compile(cx, options, file, &script))
             return false;
         MOZ_ASSERT(script);
+    }
+
+    if (!RegisterScriptPathWithModuleLoader(cx, script, filename)) {
+        return false;
     }
 
     #ifdef DEBUG
@@ -644,58 +681,33 @@ InitModuleLoader(JSContext* cx)
 }
 
 static bool
-GetLoaderObject(JSContext* cx, MutableHandleObject resultOut)
+GetModuleImportHook(JSContext* cx, MutableHandleFunction resultOut)
 {
-    // Look up the |Reflect.Loader| object that has been defined by the module
-    // loader.
-
-    RootedObject object(cx, cx->global());
-    RootedValue value(cx);
-    if (!JS_GetProperty(cx, object, "Reflect", &value) || !value.isObject())
+    Handle<GlobalObject*> global = cx->global();
+    RootedValue hookValue(cx, global->getReservedSlot(GlobalAppSlotModuleLoadHook));
+    if (hookValue.isUndefined()) {
+        JS_ReportErrorASCII(cx, "Module load hook not set");
         return false;
+    }
 
-    object = &value.toObject();
-    if (!JS_GetProperty(cx, object, "Loader", &value) || !value.isObject())
+    if (!hookValue.isObject() || !hookValue.toObject().is<JSFunction>()) {
+        JS_ReportErrorASCII(cx, "Module load hook is not a function");
         return false;
+    }
 
-    resultOut.set(&value.toObject());
-    return true;
-}
-
-static bool
-GetImportRootMethod(JSContext* cx, HandleObject loader, MutableHandleFunction resultOut)
-{
-    // Look up the module loader's |importRoot| method.
-
-    RootedValue value(cx);
-    if (!JS_GetProperty(cx, loader, "importRoot", &value) || !value.isObject())
-        return false;
-
-    RootedObject object(cx, &value.toObject());
-    if (!object->is<JSFunction>())
-        return false;
-
-    resultOut.set(&object->as<JSFunction>());
+    resultOut.set(&hookValue.toObject().as<JSFunction>());
     return true;
 }
 
 static MOZ_MUST_USE bool
 RunModule(JSContext* cx, const char* filename, FILE* file, bool compileOnly)
 {
-    // Execute a module by calling Reflect.Loader.importRoot on the resolved
-    // filename.
-
-    RootedObject loaderObj(cx);
-    if (!GetLoaderObject(cx, &loaderObj)) {
-        JS_ReportErrorASCII(cx, "Failed to get Reflect.Loader");
-        return false;
-    }
+    // Execute a module by calling the module loader's import hook on the
+    // resolved filename.
 
     RootedFunction importFun(cx);
-    if (!GetImportRootMethod(cx, loaderObj, &importFun)) {
-        JS_ReportErrorASCII(cx, "Failed to get Reflect.Loader.importRoot method");
+    if (!GetModuleImportHook(cx, &importFun))
         return false;
-    }
 
     RootedString path(cx, JS_NewStringCopyZ(cx, filename));
     if (!path)
@@ -709,7 +721,7 @@ RunModule(JSContext* cx, const char* filename, FILE* file, bool compileOnly)
     args[0].setString(path);
 
     RootedValue value(cx);
-    return JS_CallFunction(cx, loaderObj, importFun, args, &value);
+    return JS_CallFunction(cx, nullptr, importFun, args, &value);
 }
 
 static bool
@@ -1735,6 +1747,17 @@ js::shell::FileAsString(JSContext* cx, JS::HandleString pathnameStr)
 
     AutoCloseFile autoClose(file);
 
+    struct stat st;
+    if (fstat(fileno(file), &st) != 0) {
+        JS_ReportErrorUTF8(cx, "can't stat %s", pathname.ptr());
+        return nullptr;
+    }
+
+    if ((st.st_mode & S_IFMT) != S_IFREG) {
+        JS_ReportErrorUTF8(cx, "can't read non-regular file %s", pathname.ptr());
+        return nullptr;
+    }
+
     if (fseek(file, 0, SEEK_END) != 0) {
         pathname.clear();
         if (!pathname.encodeUtf8(cx, pathnameStr))
@@ -1743,7 +1766,13 @@ js::shell::FileAsString(JSContext* cx, JS::HandleString pathnameStr)
         return nullptr;
     }
 
-    size_t len = ftell(file);
+    long endPos = ftell(file);
+    if (endPos < 0) {
+        JS_ReportErrorUTF8(cx, "can't read length of %s", pathname.ptr());
+        return nullptr;
+    }
+
+    size_t len = endPos;
     if (fseek(file, 0, SEEK_SET) != 0) {
         pathname.clear();
         if (!pathname.encodeUtf8(cx, pathnameStr))
@@ -1753,8 +1782,10 @@ js::shell::FileAsString(JSContext* cx, JS::HandleString pathnameStr)
     }
 
     UniqueChars buf(static_cast<char*>(js_malloc(len + 1)));
-    if (!buf)
+    if (!buf) {
+        JS_ReportErrorUTF8(cx, "out of memory reading %s", pathname.ptr());
         return nullptr;
+    }
 
     size_t cc = fread(buf.get(), 1, len, file);
     if (cc != len) {
@@ -2188,61 +2219,6 @@ AssertEq(JSContext* cx, unsigned argc, Value* vp)
 }
 
 static JSScript*
-ValueToScript(JSContext* cx, HandleValue v, JSFunction** funp = nullptr)
-{
-    if (v.isString()) {
-        // To convert a string to a script, compile it. Parse it as an ES6 Program.
-        RootedLinearString linearStr(cx, StringToLinearString(cx, v.toString()));
-        if (!linearStr)
-            return nullptr;
-        size_t len = GetLinearStringLength(linearStr);
-        AutoStableStringChars linearChars(cx);
-        if (!linearChars.initTwoByte(cx, linearStr))
-            return nullptr;
-        const char16_t* chars = linearChars.twoByteRange().begin().get();
-
-        RootedScript script(cx);
-        CompileOptions options(cx);
-        if (!JS::Compile(cx, options, chars, len, &script))
-            return nullptr;
-        return script;
-    }
-
-    RootedFunction fun(cx, JS_ValueToFunction(cx, v));
-    if (!fun)
-        return nullptr;
-
-    // Unwrap bound functions.
-    while (fun->isBoundFunction()) {
-        JSObject* target = fun->getBoundFunctionTarget();
-        if (target && target->is<JSFunction>())
-            fun = &target->as<JSFunction>();
-        else
-            break;
-    }
-
-    // Get unwrapped async function.
-    if (IsWrappedAsyncFunction(fun))
-        fun = GetUnwrappedAsyncFunction(fun);
-    if (IsWrappedAsyncGenerator(fun))
-        fun = GetUnwrappedAsyncGenerator(fun);
-
-    if (!fun->isInterpreted()) {
-        JS_ReportErrorNumberASCII(cx, my_GetErrorMessage, nullptr, JSSMSG_SCRIPTS_ONLY);
-        return nullptr;
-    }
-
-    JSScript* script = JSFunction::getOrCreateScript(cx, fun);
-    if (!script)
-        return nullptr;
-
-    if (funp)
-        *funp = fun;
-
-    return script;
-}
-
-static JSScript*
 GetTopScript(JSContext* cx)
 {
     NonBuiltinScriptFrameIter iter(cx);
@@ -2260,7 +2236,7 @@ GetScriptAndPCArgs(JSContext* cx, CallArgs& args, MutableHandleScript scriptp,
         unsigned intarg = 0;
         if (v.isObject() &&
             JS_GetClass(&v.toObject()) == Jsvalify(&JSFunction::class_)) {
-            script = ValueToScript(cx, v);
+            script = TestingFunctionArgumentToScript(cx, v);
             if (!script)
                 return false;
             intarg++;
@@ -2293,7 +2269,7 @@ LineToPC(JSContext* cx, unsigned argc, Value* vp)
     RootedScript script(cx, GetTopScript(cx));
     int32_t lineArg = 0;
     if (args[0].isObject() && args[0].toObject().is<JSFunction>()) {
-        script = ValueToScript(cx, args[0]);
+        script = TestingFunctionArgumentToScript(cx, args[0]);
         if (!script)
             return false;
         lineArg++;
@@ -2391,6 +2367,8 @@ SrcNotes(JSContext* cx, HandleScript script, Sprinter* sp)
         switch (type) {
           case SRC_NULL:
           case SRC_IF:
+          case SRC_IF_ELSE:
+          case SRC_COND:
           case SRC_CONTINUE:
           case SRC_BREAK:
           case SRC_BREAK2LABEL:
@@ -2425,18 +2403,12 @@ SrcNotes(JSContext* cx, HandleScript script, Sprinter* sp)
             }
             break;
 
-          case SRC_IF_ELSE:
-            if (!sp->jsprintf(" else %u", unsigned(GetSrcNoteOffset(sn, 0))))
-                return false;
-            break;
-
           case SRC_FOR_IN:
           case SRC_FOR_OF:
             if (!sp->jsprintf(" closingjump %u", unsigned(GetSrcNoteOffset(sn, 0))))
                 return false;
             break;
 
-          case SRC_COND:
           case SRC_WHILE:
           case SRC_NEXTCASE:
             if (!sp->jsprintf(" offset %u", unsigned(GetSrcNoteOffset(sn, 0))))
@@ -2499,7 +2471,7 @@ Notes(JSContext* cx, unsigned argc, Value* vp)
         return false;
 
     for (unsigned i = 0; i < args.length(); i++) {
-        RootedScript script (cx, ValueToScript(cx, args[i]));
+        RootedScript script (cx, TestingFunctionArgumentToScript(cx, args[i]));
         if (!script)
             return false;
 
@@ -2734,14 +2706,17 @@ DisassembleToSprinter(JSContext* cx, unsigned argc, Value* vp, Sprinter* sprinte
             RootedFunction fun(cx);
             RootedScript script(cx);
             RootedValue value(cx, p.argv[i]);
-            if (value.isObject() && value.toObject().is<ModuleObject>())
-                script = value.toObject().as<ModuleObject>().script();
-            else
-                script = ValueToScript(cx, value, fun.address());
-            if (!script)
+            if (value.isObject() && value.toObject().is<ModuleObject>()) {
+                script = value.toObject().as<ModuleObject>().maybeScript();
+            } else {
+                script = TestingFunctionArgumentToScript(cx, value, fun.address());
+            }
+            if (!script) {
                 return false;
-            if (!DisassembleScript(cx, script, fun, p.lines, p.recursive, p.sourceNotes, sprinter))
+            }
+            if (!DisassembleScript(cx, script, fun, p.lines, p.recursive, p.sourceNotes, sprinter)) {
                 return false;
+            }
         }
     }
 
@@ -2857,7 +2832,7 @@ DisassWithSrc(JSContext* cx, unsigned argc, Value* vp)
 
     RootedScript script(cx);
     for (unsigned i = 0; i < args.length(); i++) {
-        script = ValueToScript(cx, args[i]);
+        script = TestingFunctionArgumentToScript(cx, args[i]);
         if (!script)
            return false;
 
@@ -2974,14 +2949,13 @@ static bool
 Clone(JSContext* cx, unsigned argc, Value* vp)
 {
     CallArgs args = CallArgsFromVp(argc, vp);
-    RootedObject parent(cx);
-    RootedObject funobj(cx);
 
-    if (!args.length()) {
+    if (args.length() == 0) {
         JS_ReportErrorASCII(cx, "Invalid arguments to clone");
         return false;
     }
 
+    RootedObject funobj(cx);
     {
         Maybe<JSAutoCompartment> ac;
         RootedObject obj(cx, args[0].isPrimitive() ? nullptr : &args[0].toObject());
@@ -3001,19 +2975,20 @@ Clone(JSContext* cx, unsigned argc, Value* vp)
         }
     }
 
+    RootedObject env(cx);
     if (args.length() > 1) {
-        if (!JS_ValueToObject(cx, args[1], &parent))
+        if (!JS_ValueToObject(cx, args[1], &env))
             return false;
     } else {
-        parent = js::GetGlobalForObjectCrossCompartment(&args.callee());
+        env = js::GetGlobalForObjectCrossCompartment(&args.callee());
     }
 
     // Should it worry us that we might be getting with wrappers
     // around with wrappers here?
-    JS::AutoObjectVector scopeChain(cx);
-    if (!parent->is<GlobalObject>() && !scopeChain.append(parent))
+    JS::AutoObjectVector envChain(cx);
+    if (env && !env->is<GlobalObject>() && !envChain.append(env))
         return false;
-    JSObject* clone = JS::CloneFunctionObject(cx, funobj, scopeChain);
+    JSObject* clone = JS::CloneFunctionObject(cx, funobj, envChain);
     if (!clone)
         return false;
     args.rval().setObject(*clone);
@@ -3044,7 +3019,7 @@ GetSLX(JSContext* cx, unsigned argc, Value* vp)
     CallArgs args = CallArgsFromVp(argc, vp);
     RootedScript script(cx);
 
-    script = ValueToScript(cx, args.get(0));
+    script = TestingFunctionArgumentToScript(cx, args.get(0));
     if (!script)
         return false;
     args.rval().setInt32(GetScriptLineExtent(script));
@@ -3951,6 +3926,29 @@ ParseModule(JSContext* cx, unsigned argc, Value* vp)
 }
 
 static bool
+SetModuleLoadHook(JSContext* cx, unsigned argc, Value* vp)
+{
+    CallArgs args = CallArgsFromVp(argc, vp);
+    if (args.length() != 1) {
+        JS_ReportErrorNumberASCII(cx, GetErrorMessage, nullptr, JSMSG_MORE_ARGS_NEEDED,
+                                  "setModuleLoadHook", "0", "s");
+        return false;
+    }
+
+    if (!args[0].isObject() || !args[0].toObject().is<JSFunction>()) {
+        const char* typeName = InformalValueTypeName(args[0]);
+        JS_ReportErrorASCII(cx, "expected hook function, got %s", typeName);
+        return false;
+    }
+
+    Handle<GlobalObject*> global = cx->global();
+    global->setReservedSlot(GlobalAppSlotModuleLoadHook, args[0]);
+
+    args.rval().setUndefined();
+    return true;
+}
+
+static bool
 SetModuleResolveHook(JSContext* cx, unsigned argc, Value* vp)
 {
     CallArgs args = CallArgsFromVp(argc, vp);
@@ -3966,28 +3964,30 @@ SetModuleResolveHook(JSContext* cx, unsigned argc, Value* vp)
         return false;
     }
 
-    ShellContext* sc = GetShellContext(cx);
-    sc->moduleResolveHook = &args[0].toObject().as<JSFunction>();
+    Handle<GlobalObject*> global = cx->global();
+    global->setReservedSlot(GlobalAppSlotModuleResolveHook, args[0]);
 
     args.rval().setUndefined();
     return true;
 }
 
 static JSObject*
-CallModuleResolveHook(JSContext* cx, HandleObject module, HandleString specifier)
+ShellModuleResolveHook(JSContext* cx, HandleValue referencingPrivate, HandleString specifier)
 {
-    ShellContext* sc = GetShellContext(cx);
-    if (!sc->moduleResolveHook) {
+    Handle<GlobalObject*> global = cx->global();
+    RootedValue hookValue(cx, global->getReservedSlot(GlobalAppSlotModuleResolveHook));
+    if (hookValue.isUndefined()) {
         JS_ReportErrorASCII(cx, "Module resolve hook not set");
         return nullptr;
     }
+    MOZ_ASSERT(hookValue.toObject().is<JSFunction>());
 
     JS::AutoValueArray<2> args(cx);
-    args[0].setObject(*module);
+    args[0].set(referencingPrivate);
     args[1].setString(specifier);
 
     RootedValue result(cx);
-    if (!JS_CallFunction(cx, nullptr, sc->moduleResolveHook, args, &result))
+    if (!JS_CallFunctionValue(cx, nullptr, hookValue, args, &result))
         return nullptr;
 
     if (!result.isObject() || !result.toObject().is<ModuleObject>()) {
@@ -3996,6 +3996,188 @@ CallModuleResolveHook(JSContext* cx, HandleObject module, HandleString specifier
     }
 
     return &result.toObject();
+}
+
+static bool
+SetModuleMetadataHook(JSContext* cx, unsigned argc, Value* vp)
+{
+    CallArgs args = CallArgsFromVp(argc, vp);
+    if (args.length() != 1) {
+        JS_ReportErrorNumberASCII(cx, GetErrorMessage, nullptr, JSMSG_MORE_ARGS_NEEDED,
+                                  "setModuleMetadataHook", "0", "s");
+        return false;
+    }
+
+    if (!args[0].isObject() || !args[0].toObject().is<JSFunction>()) {
+        const char* typeName = InformalValueTypeName(args[0]);
+        JS_ReportErrorASCII(cx, "expected hook function, got %s", typeName);
+        return false;
+    }
+
+    Handle<GlobalObject*> global = cx->global();
+    global->setReservedSlot(GlobalAppSlotModuleMetadataHook, args[0]);
+
+    args.rval().setUndefined();
+    return true;
+}
+
+static bool
+CallModuleMetadataHook(JSContext* cx, HandleValue modulePrivate, HandleObject metaObject)
+{
+    Handle<GlobalObject*> global = cx->global();
+    RootedValue hookValue(cx, global->getReservedSlot(GlobalAppSlotModuleMetadataHook));
+    if (hookValue.isUndefined()) {
+        JS_ReportErrorASCII(cx, "Module metadata hook not set");
+        return false;
+    }
+    MOZ_ASSERT(hookValue.toObject().is<JSFunction>());
+
+    JS::AutoValueArray<2> args(cx);
+    args[0].set(modulePrivate);
+    args[1].setObject(*metaObject);
+
+    RootedValue dummy(cx);
+    return JS_CallFunctionValue(cx, nullptr, hookValue, args, &dummy);
+}
+
+static bool
+ReportArgumentTypeError(JSContext* cx, HandleValue value, const char* expected)
+{
+    const char* typeName = InformalValueTypeName(value);
+    JS_ReportErrorASCII(cx, "Expected %s, got %s", expected, typeName);
+    return false;
+}
+
+static bool
+ShellSetModulePrivate(JSContext* cx, unsigned argc, Value* vp)
+{
+    CallArgs args = CallArgsFromVp(argc, vp);
+
+    if (args.length() != 2) {
+        JS_ReportErrorNumberASCII(cx, GetErrorMessage, nullptr, JSMSG_MORE_ARGS_NEEDED,
+                                  "setModulePrivate", "0", "s");
+        return false;
+    }
+
+    if (!args[0].isObject() || !args[0].toObject().is<ModuleObject>()) {
+        return ReportArgumentTypeError(cx, args[0], "module object");
+    }
+
+    JS::SetModulePrivate(&args[0].toObject(), args[1]);
+    args.rval().setUndefined();
+    return true;
+}
+
+static bool
+ShellGetModulePrivate(JSContext* cx, unsigned argc, Value* vp)
+{
+    CallArgs args = CallArgsFromVp(argc, vp);
+
+    if (args.length() != 1) {
+        JS_ReportErrorNumberASCII(cx, GetErrorMessage, nullptr, JSMSG_MORE_ARGS_NEEDED,
+                                  "getModulePrivate", "0", "s");
+        return false;
+    }
+
+    if (!args[0].isObject() || !args[0].toObject().is<ModuleObject>()) {
+        return ReportArgumentTypeError(cx, args[0], "module object");
+    }
+
+    args.rval().set(JS::GetModulePrivate(&args[0].toObject()));
+    return true;
+}
+
+static bool
+SetModuleDynamicImportHook(JSContext* cx, unsigned argc, Value* vp)
+{
+    CallArgs args = CallArgsFromVp(argc, vp);
+    if (args.length() != 1) {
+        JS_ReportErrorNumberASCII(cx, GetErrorMessage, nullptr, JSMSG_MORE_ARGS_NEEDED,
+                                  "setModuleDynamicImportHook", "0", "s");
+        return false;
+    }
+
+    if (!args[0].isObject() || !args[0].toObject().is<JSFunction>()) {
+        const char* typeName = InformalValueTypeName(args[0]);
+        JS_ReportErrorASCII(cx, "expected hook function, got %s", typeName);
+        return false;
+    }
+
+    Handle<GlobalObject*> global = cx->global();
+    global->setReservedSlot(GlobalAppSlotModuleDynamicImportHook, args[0]);
+
+    args.rval().setUndefined();
+    return true;
+}
+
+static bool
+FinishDynamicModuleImport(JSContext* cx, unsigned argc, Value* vp)
+{
+    CallArgs args = CallArgsFromVp(argc, vp);
+    if (args.length() != 3) {
+        JS_ReportErrorNumberASCII(cx, GetErrorMessage, nullptr, JSMSG_MORE_ARGS_NEEDED,
+                                  "finishDynamicModuleImport", "0", "s");
+        return false;
+    }
+
+    if (!args[1].isString()) {
+        return ReportArgumentTypeError(cx, args[1], "String");
+    }
+
+    if (!args[2].isObject() || !args[2].toObject().is<PromiseObject>()) {
+        return ReportArgumentTypeError(cx, args[2], "PromiseObject");
+    }
+
+    RootedString specifier(cx, args[1].toString());
+    Rooted<PromiseObject*> promise(cx, &args[2].toObject().as<PromiseObject>());
+
+    return js::FinishDynamicModuleImport(cx, args[0], specifier, promise);
+}
+
+static bool
+AbortDynamicModuleImport(JSContext* cx, unsigned argc, Value* vp)
+{
+    CallArgs args = CallArgsFromVp(argc, vp);
+    if (args.length() != 4) {
+        JS_ReportErrorNumberASCII(cx, GetErrorMessage, nullptr, JSMSG_MORE_ARGS_NEEDED,
+                                  "abortDynamicModuleImport", "0", "s");
+        return false;
+    }
+
+    if (!args[1].isString()) {
+        return ReportArgumentTypeError(cx, args[1], "String");
+    }
+
+    if (!args[2].isObject() || !args[2].toObject().is<PromiseObject>()) {
+        return ReportArgumentTypeError(cx, args[2], "PromiseObject");
+    }
+
+    RootedString specifier(cx, args[1].toString());
+    Rooted<PromiseObject*> promise(cx, &args[2].toObject().as<PromiseObject>());
+
+    cx->setPendingException(args[3]);
+    return js::FinishDynamicModuleImport(cx, args[0], specifier, promise);
+}
+
+static bool
+ShellModuleDynamicImportHook(JSContext* cx, HandleValue referencingPrivate, HandleString specifier,
+                             HandleObject promise)
+{
+    Handle<GlobalObject*> global = cx->global();
+    RootedValue hookValue(cx, global->getReservedSlot(GlobalAppSlotModuleDynamicImportHook));
+    if (hookValue.isUndefined()) {
+        JS_ReportErrorASCII(cx, "Module resolve hook not set");
+        return false;
+    }
+    MOZ_ASSERT(hookValue.toObject().is<JSFunction>());
+
+    JS::AutoValueArray<3> args(cx);
+    args[0].set(referencingPrivate);
+    args[1].setString(specifier);
+    args[2].setObject(*promise);
+
+    RootedValue result(cx);
+    return JS_CallFunctionValue(cx, nullptr, hookValue, args, &result);
 }
 
 static bool
@@ -4053,7 +4235,7 @@ Parse(JSContext* cx, unsigned argc, Value* vp)
         return false;
     Parser<FullParseHandler, char16_t> parser(cx, cx->tempLifoAlloc(), options, chars, length,
                                               /* foldConstants = */ true, usedNames, nullptr,
-                                              nullptr);
+                                              nullptr, ParseGoal::Script);
     if (!parser.checkOptions())
         return false;
 
@@ -4105,7 +4287,8 @@ SyntaxParse(JSContext* cx, unsigned argc, Value* vp)
         return false;
     Parser<frontend::SyntaxParseHandler, char16_t> parser(cx, cx->tempLifoAlloc(),
                                                           options, chars, length, false,
-                                                          usedNames, nullptr, nullptr);
+                                                          usedNames, nullptr, nullptr,
+                                                          frontend::ParseGoal::Script);
     if (!parser.checkOptions())
         return false;
 
@@ -5485,7 +5668,11 @@ DumpScopeChain(JSContext* cx, unsigned argc, Value* vp)
         }
         script = JSFunction::getOrCreateScript(cx, fun);
     } else {
-        script = obj->as<ModuleObject>().script();
+        script = obj->as<ModuleObject>().maybeScript();
+        if (!script) {
+            JS_ReportErrorASCII(cx, "module does not have an associated script");
+            return false;
+        }
     }
 
     script->bodyScope()->dump();
@@ -5922,6 +6109,10 @@ WasmLoop(JSContext* cx, unsigned argc, Value* vp)
 }
 
 static const JSFunctionSpecWithHelp shell_functions[] = {
+    JS_FN_HELP("clone", Clone, 1, 0,
+"clone(fun[, scope])",
+"  Clone function object."),
+
     JS_FN_HELP("version", Version, 0, 0,
 "version([number])",
 "  Get or force a script compilation version number."),
@@ -6128,11 +6319,47 @@ static const JSFunctionSpecWithHelp shell_functions[] = {
 "parseModule(code)",
 "  Parses source text as a module and returns a Module object."),
 
+    JS_FN_HELP("setModuleLoadHook", SetModuleLoadHook, 1, 0,
+"setModuleLoadHook(function(path))",
+"  Set the shell specific module load hook to |function|.\n"
+"  This hook is used to load a module graph.  It should be implemented by the\n"
+"  module loader."),
+
     JS_FN_HELP("setModuleResolveHook", SetModuleResolveHook, 1, 0,
-"setModuleResolveHook(function(module, specifier) {})",
+"setModuleResolveHook(function(referrer, specifier))",
 "  Set the HostResolveImportedModule hook to |function|.\n"
 "  This hook is used to look up a previously loaded module object.  It should\n"
 "  be implemented by the module loader."),
+
+    JS_FN_HELP("setModuleMetadataHook", SetModuleMetadataHook, 1, 0,
+"setModuleMetadataHook(function(module) {})",
+"  Set the HostPopulateImportMeta hook to |function|.\n"
+"  This hook is used to create the metadata object returned by import.meta for\n"
+"  a module.  It should be implemented by the module loader."),
+
+    JS_FN_HELP("setModuleDynamicImportHook", SetModuleDynamicImportHook, 1, 0,
+"setModuleDynamicImportHook(function(referrer, specifier, promise))",
+"  Set the HostImportModuleDynamically hook to |function|.\n"
+"  This hook is used to dynamically import a module.  It should\n"
+"  be implemented by the module loader."),
+
+    JS_FN_HELP("finishDynamicModuleImport", FinishDynamicModuleImport, 3, 0,
+"finishDynamicModuleImport(referrer, specifier, promise)",
+"  The module loader's dynamic import hook should call this when the module has"
+"  been loaded successfully."),
+
+    JS_FN_HELP("abortDynamicModuleImport", AbortDynamicModuleImport, 4, 0,
+"abortDynamicModuleImport(referrer, specifier, promise, error)",
+"  The module loader's dynamic import hook should call this when the module "
+"  import has failed."),
+
+    JS_FN_HELP("setModulePrivate", ShellSetModulePrivate, 2, 0,
+"setModulePrivate(scriptObject, privateValue)",
+"  Associate a private value with a module object.\n"),
+
+    JS_FN_HELP("getModulePrivate", ShellGetModulePrivate, 2, 0,
+"getModulePrivate(scriptObject)",
+"  Get the private value associated with a module object.\n"),
 
     JS_FN_HELP("getModuleLoadPath", GetModuleLoadPath, 0, 0,
 "getModuleLoadPath()",
@@ -6387,10 +6614,6 @@ static const JSFunctionSpecWithHelp shell_functions[] = {
 };
 
 static const JSFunctionSpecWithHelp fuzzing_unsafe_functions[] = {
-    JS_FN_HELP("clone", Clone, 1, 0,
-"clone(fun[, scope])",
-"  Clone function object."),
-
     JS_FN_HELP("getSelfHostedValue", GetSelfHostedValue, 1, 0,
 "getSelfHostedValue()",
 "  Get a self-hosted value by its name. Note that these values don't get \n"
@@ -7501,8 +7724,9 @@ ProcessArgs(JSContext* cx, OptionParser* op)
     if (!sc->moduleLoadPath)
         return false;
 
-    if (!modulePaths.empty() && !InitModuleLoader(cx))
+    if (!InitModuleLoader(cx)) {
         return false;
+    }
 
     while (!filePaths.empty() || !codeChunks.empty() || !modulePaths.empty()) {
         size_t fpArgno = filePaths.empty() ? SIZE_MAX : filePaths.argno();
@@ -8302,7 +8526,9 @@ main(int argc, char** argv, char** envp)
 
     js::SetPreserveWrapperCallback(cx, DummyPreserveWrapperCallback);
 
-    JS::SetModuleResolveHook(cx->runtime(), CallModuleResolveHook);
+    JS::SetModuleResolveHook(cx->runtime(), ShellModuleResolveHook);
+    JS::SetModuleDynamicImportHook(cx->runtime(), ShellModuleDynamicImportHook);
+    JS::SetModuleMetadataHook(cx->runtime(), CallModuleMetadataHook);
 
     result = Shell(cx, &op, envp);
 

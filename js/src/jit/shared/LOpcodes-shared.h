@@ -105,6 +105,7 @@
     _(SetArgumentsObjectArg)        \
     _(ReturnFromCtor)               \
     _(ComputeThis)                  \
+    _(ImplicitThis)                 \
     _(BitNotI)                      \
     _(BitNotV)                      \
     _(BitOpI)                       \
@@ -242,6 +243,8 @@
     _(UnarySharedStub)              \
     _(NullarySharedStub)            \
     _(ClassConstructor)             \
+    _(ModuleMetadata)               \
+    _(DynamicImport)                \
     _(Lambda)                       \
     _(LambdaArrow)                  \
     _(LambdaForSingleton)           \
@@ -317,6 +320,9 @@
     _(FunctionEnvironment)          \
     _(NewLexicalEnvironmentObject)  \
     _(CopyLexicalEnvironmentObject) \
+    _(HomeObject)                   \
+    _(HomeObjectSuperBase)          \
+    _(GetPropSuperCacheV)           \
     _(GetPropertyCacheV)            \
     _(GetPropertyCacheT)            \
     _(GetPropertyPolymorphicV)      \

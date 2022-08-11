@@ -266,6 +266,8 @@ class SyntaxParseHandler
     Node newSuperBase(Node thisName, const TokenPos& pos) { return NodeSuperBase; }
 
     MOZ_MUST_USE bool addPrototypeMutation(Node literal, uint32_t begin, Node expr) { return true; }
+    Node newPropertyDefinition(Node name, Node expr) { return NodeGeneric; }
+    void addPropertyDefinition(Node literal, Node propdef) {}
     MOZ_MUST_USE bool addPropertyDefinition(Node literal, Node name, Node expr) { return true; }
     MOZ_MUST_USE bool addShorthand(Node literal, Node name, Node expr) { return true; }
     MOZ_MUST_USE bool addSpreadProperty(Node literal, uint32_t begin, Node inner) { return true; }
@@ -298,6 +300,12 @@ class SyntaxParseHandler
         return NodeGeneric;
     }
     Node newExportBatchSpec(const TokenPos& pos) {
+        return NodeGeneric;
+    }
+    Node newImportMeta(Node importHolder, Node metaHolder) {
+        return NodeGeneric;
+    }
+    Node newCallImport(Node importHolder, Node singleArg) {
         return NodeGeneric;
     }
 
@@ -351,8 +359,6 @@ class SyntaxParseHandler
                                     Node catchGuard, Node catchBody) { return true; }
 
     MOZ_MUST_USE bool setLastFunctionFormalParameterDefault(Node funcpn, Node pn) { return true; }
-
-    void checkAndSetIsDirectRHSAnonFunction(Node pn) {}
 
     Node newFunctionStatement(const TokenPos& pos) { return NodeFunctionDefinition; }
     Node newFunctionExpression(const TokenPos& pos) { return NodeFunctionDefinition; }
@@ -533,8 +539,6 @@ class SyntaxParseHandler
         return pn; // Remain in syntax-parse mode.
     }
     void setInDirectivePrologue(Node pn) {}
-
-    bool isConstant(Node pn) { return false; }
 
     bool isName(Node node) {
         return node == NodeName ||

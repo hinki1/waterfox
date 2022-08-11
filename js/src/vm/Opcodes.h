@@ -63,6 +63,7 @@
  *     Super
  *     Arguments
  *     Var Scope
+ *     Modules
  *   [Operators]
  *     Comparison Operators
  *     Arithmetic Operators
@@ -535,7 +536,7 @@
     macro(JSOP_GETELEM,   55, "getelem",    NULL,         1,  2,  1, JOF_BYTE |JOF_ELEM|JOF_TYPESET|JOF_LEFTASSOC) \
     /*
      * Pops the top three values on the stack as 'val', 'propval' and 'obj',
-     * sets 'propval' property of 'obj' as 'val', pushes 'obj' onto the
+     * sets 'propval' property of 'obj' as 'val', pushes 'val' onto the
      * stack.
      *   Category: Literals
      *   Type: Object
@@ -545,7 +546,7 @@
     macro(JSOP_SETELEM,   56, "setelem",    NULL,         1,  3,  1, JOF_BYTE |JOF_ELEM|JOF_PROPSET|JOF_DETECTING|JOF_CHECKSLOPPY) \
     /*
      * Pops the top three values on the stack as 'val', 'propval' and 'obj',
-     * sets 'propval' property of 'obj' as 'val', pushes 'obj' onto the
+     * sets 'propval' property of 'obj' as 'val', pushes 'val' onto the
      * stack. Throws a TypeError if the set fails, per strict mode
      * semantics.
      *   Category: Literals
@@ -874,15 +875,15 @@
     /*
      * Initialize the home object for functions with super bindings.
      *
-     * This opcode takes the function and the object to be the home object, does
-     * the set, and leaves both on the stack.
+     * This opcode takes the function and the object to be the home object,
+     * does the set, and leaves the function on the stack.
+     *
      *   Category: Literals
      *   Type: Object
-     *   Operands: uint8_t n
-     *   Stack: homeObject, [...n], fun => homeObject, [...n], fun
-     */\
-    macro(JSOP_INITHOMEOBJECT,  92, "inithomeobject",   NULL,         2,  2,  2, JOF_UINT8) \
-    \
+     *   Operands:
+     *   Stack: fun, homeObject => fun
+     */ \
+    macro(JSOP_INITHOMEOBJECT, 92, "inithomeobject", NULL, 1,  2,  1, JOF_BYTE) \
     /*
      * Initialize a named property in an object literal, like '{a: x}'.
      *
@@ -1279,7 +1280,7 @@
      *   Category: Literals
      *   Type: Object
      *   Operands:
-     *   Stack: propval, receiver, obj => obj[propval]
+     *   Stack: receiver, propval, obj => obj[propval]
      */ \
     macro(JSOP_GETELEM_SUPER, 125, "getelem-super", NULL, 1,  3,  1, JOF_BYTE|JOF_ELEM|JOF_TYPESET|JOF_LEFTASSOC) \
     macro(JSOP_UNUSED126, 126, "unused126", NULL, 5,  0,  1, JOF_UINT32) \
@@ -1631,7 +1632,7 @@
      *   Category: Literals
      *   Type: Object
      *   Operands:
-     *   Stack: propval, receiver, obj, val => val
+     *   Stack: receiver, propval, obj, val => val
      */ \
     macro(JSOP_SETELEM_SUPER,   158, "setelem-super", NULL, 1,  4,  1, JOF_BYTE |JOF_ELEM|JOF_PROPSET|JOF_DETECTING|JOF_CHECKSLOPPY) \
     /*
@@ -1640,7 +1641,7 @@
      *   Category: Literals
      *   Type: Object
      *   Operands:
-     *   Stack: propval, receiver, obj, val => val
+     *   Stack: receiver, propval, obj, val => val
      */ \
     macro(JSOP_STRICTSETELEM_SUPER, 159, "strict-setelem-super", NULL, 1,  4, 1, JOF_BYTE |JOF_ELEM|JOF_PROPSET|JOF_DETECTING|JOF_CHECKSTRICT) \
     \
@@ -2349,6 +2350,25 @@
      */ \
     macro(JSOP_CALL_IGNORES_RV, 231, "call-ignores-rv", NULL, 3, -1, 1, JOF_UINT16|JOF_INVOKE|JOF_TYPESET)\
     /*
+     * Push "import.meta"
+     *
+     *   Category: Variables and Scopes
+     *   Type: Modules
+     *   Operands:
+     *   Stack: => import.meta
+     */ \
+    macro(JSOP_IMPORTMETA,    232, "importmeta", NULL,      1,  0,  1,  JOF_BYTE)\
+    /*
+     * Dynamic import of the module specified by the string value on the top of
+     * the stack.
+     *
+     *   Category: Variables and Scopes
+     *   Type: Modules
+     *   Operands:
+     *   Stack: arg => rval
+     */ \
+    macro(JSOP_DYNAMIC_IMPORT, 233, "call-import", NULL,      1,  1,  1,  JOF_BYTE)\
+    /*
      * If the value on top of the stack is not null or undefined, jumps to a 32-bit offset from the
      * current bytecode.
      *
@@ -2357,15 +2377,13 @@
      *   Operands: int32_t offset
      *   Stack: cond => cond
      */ \
-    macro(JSOP_COALESCE, 232, "coalesce", NULL, 5, 1, 1, JOF_JUMP|JOF_DETECTING)
+    macro(JSOP_COALESCE, 234, "coalesce", NULL, 5, 1, 1, JOF_JUMP|JOF_DETECTING)
 
 /*
  * In certain circumstances it may be useful to "pad out" the opcode space to
  * a power of two.  Use this macro to do so.
  */
 #define FOR_EACH_TRAILING_UNUSED_OPCODE(macro) \
-    macro(233) \
-    macro(234) \
     macro(235) \
     macro(236) \
     macro(237) \
