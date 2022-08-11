@@ -140,6 +140,8 @@ class CodeGenerator final : public CodeGeneratorSpecific
     void visitUnarySharedStub(LUnarySharedStub* lir);
     void visitNullarySharedStub(LNullarySharedStub* lir);
     void visitClassConstructor(LClassConstructor* lir);
+    void visitModuleMetadata(LModuleMetadata* lir);
+    void visitDynamicImport(LDynamicImport* lir);
     void visitLambda(LLambda* lir);
     void visitOutOfLineLambdaArrow(OutOfLineLambdaArrow* ool);
     void visitLambdaArrow(LLambdaArrow* lir);
@@ -231,6 +233,7 @@ class CodeGenerator final : public CodeGeneratorSpecific
     void visitSetArgumentsObjectArg(LSetArgumentsObjectArg* lir);
     void visitReturnFromCtor(LReturnFromCtor* lir);
     void visitComputeThis(LComputeThis* lir);
+    void visitImplicitThis(LImplicitThis* lir);
     void visitArrayLength(LArrayLength* lir);
     void visitSetArrayLength(LSetArrayLength* lir);
     void visitGetNextEntryForIterator(LGetNextEntryForIterator* lir);
@@ -290,6 +293,8 @@ class CodeGenerator final : public CodeGeneratorSpecific
     void visitSinCos(LSinCos *lir);
     void visitStringSplit(LStringSplit* lir);
     void visitFunctionEnvironment(LFunctionEnvironment* lir);
+    void visitHomeObject(LHomeObject* lir);
+    void visitHomeObjectSuperBase(LHomeObjectSuperBase* lir);
     void visitNewLexicalEnvironmentObject(LNewLexicalEnvironmentObject* lir);
     void visitCopyLexicalEnvironmentObject(LCopyLexicalEnvironmentObject* lir);
     void visitCallGetProperty(LCallGetProperty* lir);
@@ -427,6 +432,7 @@ class CodeGenerator final : public CodeGeneratorSpecific
 
     void visitGetPropertyCacheV(LGetPropertyCacheV* ins);
     void visitGetPropertyCacheT(LGetPropertyCacheT* ins);
+    void visitGetPropSuperCacheV(LGetPropSuperCacheV* ins);
     void visitBindNameCache(LBindNameCache* ins);
     void visitCallSetProperty(LInstruction* ins);
     void visitSetPropertyCache(LSetPropertyCache* ins);

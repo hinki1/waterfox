@@ -268,8 +268,8 @@ nsresult nsJSThunk::EvaluateScript(nsIChannel *aChannel,
     {
         nsJSUtils::ExecutionContext exec(cx, globalJSObject);
         exec.SetCoerceToString(true);
-        exec.CompileAndExec(options, NS_ConvertUTF8toUTF16(script));
-        rv = exec.ExtractReturnValue(&v);
+        exec.Compile(options, NS_ConvertUTF8toUTF16(script));
+        rv = exec.ExecScript(&v);
     }
 
     js::AssertSameCompartment(cx, v);
@@ -1378,6 +1378,20 @@ nsJSURI::StartClone(mozilla::net::nsSimpleURI::RefHandlingEnum refHandlingMode,
     nsJSURI* url = new nsJSURI(baseClone);
     SetRefOnClone(url, refHandlingMode, newRef);
     return url;
+}
+
+NS_IMPL_ISUPPORTS(nsJSURI::Mutator, nsIURISetters, nsIURIMutator)
+
+NS_IMETHODIMP
+nsJSURI::Mutate(nsIURIMutator** aMutator)
+{
+    RefPtr<nsJSURI::Mutator> mutator = new nsJSURI::Mutator();
+    nsresult rv = mutator->InitFromURI(this);
+    if (NS_FAILED(rv)) {
+        return rv;
+    }
+    mutator.forget(aMutator);
+    return NS_OK;
 }
 
 /* virtual */ nsresult

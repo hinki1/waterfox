@@ -21,6 +21,7 @@
 #include "jit/Lowering.h"
 #include "jit/MIRGraph.h"
 #include "vm/ArgumentsObject.h"
+#include "vm/EnvironmentObject.h"
 #include "vm/Opcodes.h"
 #include "vm/RegExpStatics.h"
 #include "vm/TraceLogging.h"
@@ -2198,6 +2199,18 @@ IonBuilder::inspectOpcode(JSOp op)
          return Ok();
       }
 
+      case JSOP_SUPERBASE:
+        return jsop_superbase();
+
+      case JSOP_GETPROP_SUPER:
+      {
+        PropertyName* name = info().getAtom(pc)->asPropertyName();
+        return jsop_getprop_super(name);
+      }
+
+      case JSOP_GETELEM_SUPER:
+        return jsop_getelem_super();
+
       case JSOP_GETPROP:
       case JSOP_CALLPROP:
       {
@@ -2328,9 +2341,13 @@ IonBuilder::inspectOpcode(JSOp op)
             pushConstant(UndefinedValue());
             return Ok();
         }
-
-        // Just fall through to the unsupported bytecode case.
-        break;
+        // Fallthrough to IMPLICITTHIS in non-syntactic scope case
+        MOZ_FALLTHROUGH;
+      case JSOP_IMPLICITTHIS:
+      {
+        PropertyName* name = info().getAtom(pc)->asPropertyName();
+        return jsop_implicitthis(name);
+      }
 
       case JSOP_NEWTARGET:
         return jsop_newtarget();
@@ -2369,6 +2386,12 @@ IonBuilder::inspectOpcode(JSOp op)
         return Ok();
       }
 
+      case JSOP_IMPORTMETA:
+        return jsop_importmeta();
+
+      case JSOP_DYNAMIC_IMPORT:
+        return jsop_dynamic_import();
+
       // ===== NOT Yet Implemented =====
       // Read below!
 
@@ -2393,10 +2416,7 @@ IonBuilder::inspectOpcode(JSOp op)
       case JSOP_CHECKTHISREINIT:
 
       // Super
-      case JSOP_SUPERBASE:
       case JSOP_SETPROP_SUPER:
-      case JSOP_GETPROP_SUPER:
-      case JSOP_GETELEM_SUPER:
       case JSOP_SETELEM_SUPER:
       case JSOP_STRICTSETPROP_SUPER:
       case JSOP_STRICTSETELEM_SUPER:
@@ -2434,7 +2454,6 @@ IonBuilder::inspectOpcode(JSOp op)
       case JSOP_FINALLY:
       case JSOP_GETRVAL:
       case JSOP_GOSUB:
-      case JSOP_IMPLICITTHIS:
       case JSOP_RETSUB:
       case JSOP_SETINTRINSIC:
       case JSOP_THROWMSG:
@@ -9733,6 +9752,64 @@ IonBuilder::jsop_not()
     return Ok();
 }
 
+AbortReasonOr<Ok>
+IonBuilder::jsop_superbase()
+{
+    JSFunction* fun = info().funMaybeLazy();
+    if (!fun || !fun->allowSuperProperty())
+        return abort(AbortReason::Disable, "super only supported directly in methods");
+
+    auto* homeObject = MHomeObject::New(alloc(), getCallee());
+    current->add(homeObject);
+
+    auto* superBase = MHomeObjectSuperBase::New(alloc(), homeObject);
+    current->add(superBase);
+    current->push(superBase);
+
+    MOZ_TRY(resumeAfter(superBase));
+    return Ok();
+}
+
+
+AbortReasonOr<Ok>
+IonBuilder::jsop_getprop_super(PropertyName* name)
+{
+    MDefinition* obj = current->pop();
+    MDefinition* receiver = current->pop();
+
+    MConstant* id = constant(StringValue(name));
+    auto* ins = MGetPropSuperCache::New(alloc(), obj, receiver, id);
+    current->add(ins);
+    current->push(ins);
+
+    MOZ_TRY(resumeAfter(ins));
+
+    TemporaryTypeSet* types = bytecodeTypes(pc);
+    return pushTypeBarrier(ins, types, BarrierKind::TypeSet);
+}
+
+AbortReasonOr<Ok>
+IonBuilder::jsop_getelem_super()
+{
+    MDefinition* obj = current->pop();
+    MDefinition* id = current->pop();
+    MDefinition* receiver = current->pop();
+
+#if defined(JS_CODEGEN_X86)
+    if (instrumentedProfiling())
+        return abort(AbortReason::Disable, "profiling functions with GETELEM_SUPER is disabled on x86");
+#endif
+
+    auto* ins = MGetPropSuperCache::New(alloc(), obj, receiver, id);
+    current->add(ins);
+    current->push(ins);
+
+    MOZ_TRY(resumeAfter(ins));
+
+    TemporaryTypeSet* types = bytecodeTypes(pc);
+    return pushTypeBarrier(ins, types, BarrierKind::TypeSet);
+}
+
 NativeObject*
 IonBuilder::commonPrototypeWithGetterSetter(TemporaryTypeSet* types, PropertyName* name,
                                             bool isGetter, JSFunction* getterOrSetter,
@@ -12661,6 +12738,52 @@ IonBuilder::jsop_debugger()
     // cx->compartment()->isDebuggee(). Resume in-place and have baseline
     // handle the details.
     return resumeAt(debugger, pc);
+}
+
+AbortReasonOr<Ok>
+IonBuilder::jsop_implicitthis(PropertyName* name)
+{
+    MOZ_ASSERT(usesEnvironmentChain());
+
+    MImplicitThis* implicitThis = MImplicitThis::New(alloc(), current->environmentChain(), name);
+    current->add(implicitThis);
+    current->push(implicitThis);
+
+    return resumeAfter(implicitThis);
+}
+
+AbortReasonOr<Ok>
+IonBuilder::jsop_importmeta()
+{
+    if (info().analysisMode() == Analysis_ArgumentsUsage) {
+        // The meta object may not have been created yet. Just push a dummy
+        // value, it does not affect the arguments analysis.
+        MUnknownValue* unknown = MUnknownValue::New(alloc());
+        current->add(unknown);
+        current->push(unknown);
+        return Ok();
+    }
+
+    ModuleObject* module = GetModuleObjectForScript(script());
+    MOZ_ASSERT(module);
+
+    MModuleMetadata* meta = MModuleMetadata::New(alloc(), module);
+    current->add(meta);
+    current->push(meta);
+    return resumeAfter(meta);
+}
+
+AbortReasonOr<Ok>
+IonBuilder::jsop_dynamic_import()
+{
+    JSObject* referencingScriptSource = script()->sourceObject();
+
+    MDefinition* specifier = current->pop();
+
+    MDynamicImport* ins = MDynamicImport::New(alloc(), referencingScriptSource, specifier);
+    current->add(ins);
+    current->push(ins);
+    return resumeAfter(ins);
 }
 
 MInstruction*

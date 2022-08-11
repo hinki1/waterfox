@@ -40,6 +40,7 @@
 #include "builtin/Stream.h"
 #include "builtin/TypedObject.h"
 #include "builtin/WeakMapObject.h"
+#include "frontend/BytecodeCompiler.h"
 #include "gc/Marking.h"
 #include "gc/Policy.h"
 #include "jit/AtomicOperations.h"
@@ -512,10 +513,10 @@ intrinsic_MakeDefaultConstructor(JSContext* cx, unsigned argc, Value* vp)
 
     // Because self-hosting code does not allow top-level lexicals,
     // class constructors are class expressions in top-level vars.
-    // Because of this, we give them a guessed atom. Since they
+    // Because of this, we give them an inferred atom. Since they
     // will always be cloned, and given an explicit atom, instead
     // overrule that.
-    ctor->clearGuessedAtom();
+    ctor->clearInferredName();
 
     args.rval().setUndefined();
     return true;
@@ -2117,16 +2118,11 @@ intrinsic_HostResolveImportedModule(JSContext* cx, unsigned argc, Value* vp)
     RootedModuleObject module(cx, &args[0].toObject().as<ModuleObject>());
     RootedString specifier(cx, args[1].toString());
 
-    JS::ModuleResolveHook moduleResolveHook = cx->runtime()->moduleResolveHook;
-    if (!moduleResolveHook) {
-        JS_ReportErrorASCII(cx, "Module resolve hook not set");
+    RootedValue referencingPrivate(cx, JS::GetModulePrivate(module));
+    RootedObject result(cx, CallModuleResolveHook(cx, referencingPrivate, specifier));
+    if (!result) {
         return false;
     }
-
-    RootedObject result(cx);
-    result = moduleResolveHook(cx, module, specifier);
-    if (!result)
-        return false;
 
     if (!result->is<ModuleObject>()) {
         JS_ReportErrorASCII(cx, "Module resolve hook did not return Module object");
@@ -3051,6 +3047,26 @@ CloneString(JSContext* cx, JSFlatString* selfHostedString)
            : NewStringCopyNDontDeflate<CanGC>(cx, chars.twoByteRange().begin().get(), len);
 }
 
+// Returns the ScriptSourceObject to use for cloned self-hosted scripts in the
+// current compartment.
+static ScriptSourceObject* SelfHostingScriptSourceObject(JSContext* cx) {
+  if (ScriptSourceObject* sso = cx->compartment()->selfHostingScriptSource) {
+    return sso;
+  }
+
+  CompileOptions options(cx);
+  FillSelfHostingCompileOptions(options);
+
+  ScriptSourceObject* sourceObject =
+      frontend::CreateScriptSourceObject(cx, options);
+  if (!sourceObject) {
+    return nullptr;
+  }
+
+  cx->compartment()->selfHostingScriptSource.set(sourceObject);
+  return sourceObject;
+}
+
 static JSObject*
 CloneObject(JSContext* cx, HandleNativeObject selfHostedObject)
 {
@@ -3072,23 +3088,34 @@ CloneObject(JSContext* cx, HandleNativeObject selfHostedObject)
     RootedObject clone(cx);
     if (selfHostedObject->is<JSFunction>()) {
         RootedFunction selfHostedFunction(cx, &selfHostedObject->as<JSFunction>());
-        bool hasName = selfHostedFunction->explicitName() != nullptr;
+        if (selfHostedFunction->isInterpreted()) {
+            bool hasName = selfHostedFunction->explicitName() != nullptr;
 
-        // Arrow functions use the first extended slot for their lexical |this| value.
-        MOZ_ASSERT(!selfHostedFunction->isArrow());
-        js::gc::AllocKind kind = hasName
-                                 ? gc::AllocKind::FUNCTION_EXTENDED
-                                 : selfHostedFunction->getAllocKind();
-        MOZ_ASSERT(!CanReuseScriptForClone(cx->compartment(), selfHostedFunction, cx->global()));
-        Rooted<LexicalEnvironmentObject*> globalLexical(cx, &cx->global()->lexicalEnvironment());
-        RootedScope emptyGlobalScope(cx, &cx->global()->emptyGlobalScope());
-        clone = CloneFunctionAndScript(cx, selfHostedFunction, globalLexical, emptyGlobalScope,
-                                       kind);
-        // To be able to re-lazify the cloned function, its name in the
-        // self-hosting compartment has to be stored on the clone.
-        if (clone && hasName) {
-            clone->as<JSFunction>().setExtendedSlot(LAZY_FUNCTION_NAME_SLOT,
-                                                    StringValue(selfHostedFunction->explicitName()));
+            // Arrow functions use the first extended slot for their lexical |this| value.
+            MOZ_ASSERT(!selfHostedFunction->isArrow());
+            js::gc::AllocKind kind = hasName
+                ? gc::AllocKind::FUNCTION_EXTENDED
+                : selfHostedFunction->getAllocKind();
+
+            Handle<GlobalObject*> global = cx->global();
+            Rooted<LexicalEnvironmentObject*> globalLexical(cx, &global->lexicalEnvironment());
+            RootedScope emptyGlobalScope(cx, &global->emptyGlobalScope());
+            Rooted<ScriptSourceObject*> sourceObject(
+                cx, SelfHostingScriptSourceObject(cx));
+            if (!sourceObject) {
+                return nullptr;
+            }
+            MOZ_ASSERT(!CanReuseScriptForClone(cx->compartment(), selfHostedFunction, global));
+            clone = CloneFunctionAndScript(cx, selfHostedFunction, globalLexical, emptyGlobalScope,
+                                           sourceObject, kind);
+            // To be able to re-lazify the cloned function, its name in the
+            // self-hosting compartment has to be stored on the clone.
+            if (clone && hasName) {
+                Value nameVal = StringValue(selfHostedFunction->explicitName());
+                clone->as<JSFunction>().setExtendedSlot(LAZY_FUNCTION_NAME_SLOT, nameVal);
+            }
+        } else {
+            clone = CloneSelfHostingIntrinsic(cx, selfHostedFunction);
         }
     } else if (selfHostedObject->is<RegExpObject>()) {
         RegExpObject& reobj = selfHostedObject->as<RegExpObject>();
@@ -3206,6 +3233,11 @@ JSRuntime::cloneSelfHostedFunctionScript(JSContext* cx, HandlePropertyName name,
     if (!sourceScript)
         return false;
 
+    Rooted<ScriptSourceObject*> sourceObject(cx, SelfHostingScriptSourceObject(cx));
+    if (!sourceObject) {
+        return false;
+    }
+
     // Assert that there are no intervening scopes between the global scope
     // and the self-hosted script. Toplevel lexicals are explicitly forbidden
     // by the parser when parsing self-hosted code. The fact they have the
@@ -3213,8 +3245,10 @@ JSRuntime::cloneSelfHostedFunctionScript(JSContext* cx, HandlePropertyName name,
     // invariants.
     MOZ_ASSERT(sourceScript->outermostScope()->enclosing()->kind() == ScopeKind::Global);
     RootedScope emptyGlobalScope(cx, &cx->global()->emptyGlobalScope());
-    if (!CloneScriptIntoFunction(cx, emptyGlobalScope, targetFun, sourceScript))
+    if (!CloneScriptIntoFunction(cx, emptyGlobalScope, targetFun, sourceScript,
+                                 sourceObject)) {
         return false;
+    }
     MOZ_ASSERT(!targetFun->isInterpretedLazy());
 
     MOZ_ASSERT(sourceFun->nargs() == targetFun->nargs());

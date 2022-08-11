@@ -7,7 +7,9 @@
 #include "builtin/ModuleObject.h"
 
 #include "mozilla/EnumSet.h"
+#include "mozilla/ScopeExit.h"
 
+#include "builtin/Promise.h"
 #include "builtin/SelfHostingDefines.h"
 #include "frontend/ParseNode.h"
 #include "frontend/SharedContext.h"
@@ -397,12 +399,13 @@ ModuleNamespaceObject::create(JSContext* cx, HandleModuleObject module, HandleOb
     ProxyOptions options;
     options.setLazyProto(true);
     options.setSingleton(true);
+    Rooted<UniquePtr<IndirectBindingMap>> rootedBindings(cx, std::move(bindings));
     RootedObject object(cx, NewProxyObject(cx, &proxyHandler, priv, nullptr, options));
     if (!object)
         return nullptr;
 
     SetProxyReservedSlot(object, ExportsSlot, ObjectValue(*exports));
-    SetProxyReservedSlot(object, BindingsSlot, PrivateValue(bindings.release()));
+    SetProxyReservedSlot(object, BindingsSlot, PrivateValue(rootedBindings.release()));
 
     return &object->as<ModuleNamespaceObject>();
 }
@@ -533,12 +536,61 @@ ModuleNamespaceObject::ProxyHandler::getOwnPropertyDescriptor(JSContext* cx, Han
     return true;
 }
 
+static bool
+ValidatePropertyDescriptor(JSContext* cx, Handle<PropertyDescriptor> desc,
+                           bool expectedWritable, bool expectedEnumerable,
+                           bool expectedConfigurable, HandleValue expectedValue,
+                           ObjectOpResult& result)
+{
+    if (desc.isAccessorDescriptor())
+        return result.fail(JSMSG_CANT_REDEFINE_PROP);
+
+    if (desc.hasWritable() && desc.writable() != expectedWritable)
+        return result.fail(JSMSG_CANT_REDEFINE_PROP);
+
+    if (desc.hasEnumerable() && desc.enumerable() != expectedEnumerable)
+        return result.fail(JSMSG_CANT_REDEFINE_PROP);
+
+    if (desc.hasConfigurable() && desc.configurable() != expectedConfigurable)
+        return result.fail(JSMSG_CANT_REDEFINE_PROP);
+
+    if (desc.hasValue()) {
+        bool same;
+        if (!SameValue(cx, desc.value(), expectedValue, &same))
+            return false;
+        if (!same)
+            return result.fail(JSMSG_CANT_REDEFINE_PROP);
+    }
+
+    return result.succeed();
+}
+
 bool
 ModuleNamespaceObject::ProxyHandler::defineProperty(JSContext* cx, HandleObject proxy, HandleId id,
                                                     Handle<PropertyDescriptor> desc,
                                                     ObjectOpResult& result) const
 {
-    return result.failReadOnly();
+    if (JSID_IS_SYMBOL(id)) {
+        if (JSID_TO_SYMBOL(id) == cx->wellKnownSymbols().toStringTag) {
+            RootedValue value(cx, StringValue(cx->names().Module));
+            return ValidatePropertyDescriptor(cx, desc, false, false, false, value, result);
+        }
+        return result.fail(JSMSG_CANT_DEFINE_PROP_OBJECT_NOT_EXTENSIBLE);
+    }
+
+    const IndirectBindingMap& bindings = proxy->as<ModuleNamespaceObject>().bindings();
+    ModuleEnvironmentObject* env;
+    Shape* shape;
+    if (!bindings.lookup(id, &env, &shape))
+        return result.fail(JSMSG_CANT_DEFINE_PROP_OBJECT_NOT_EXTENSIBLE);
+
+    RootedValue value(cx, env->getSlot(shape->slot()));
+    if (value.isMagic(JS_UNINITIALIZED_LEXICAL)) {
+        ReportRuntimeLexicalError(cx, JSMSG_UNINITIALIZED_LEXICAL, id);
+        return false;
+    }
+
+    return ValidatePropertyDescriptor(cx, desc, true, true, false, value, result);
 }
 
 bool
@@ -758,7 +810,8 @@ ModuleObject::initialEnvironment() const
 ModuleEnvironmentObject*
 ModuleObject::environment() const
 {
-    MOZ_ASSERT(!hadEvaluationError());
+    // Note that this it's valid to call this even if there was an error
+    // evaluating the module.
 
     // According to the spec the environment record is created during
     // instantiation, but we create it earlier than that.
@@ -790,6 +843,12 @@ ModuleObject::namespace_()
     return &value.toObject().as<ModuleNamespaceObject>();
 }
 
+ScriptSourceObject*
+ModuleObject::scriptSourceObject() const
+{
+    return &getReservedSlot(ScriptSourceObjectSlot).toObject().as<ScriptSourceObject>();
+}
+
 FunctionDeclarationVector*
 ModuleObject::functionDeclarations()
 {
@@ -803,8 +862,10 @@ ModuleObject::functionDeclarations()
 void
 ModuleObject::init(HandleScript script)
 {
-    initReservedSlot(ScriptSlot, PrivateValue(script));
+    MOZ_ASSERT(script);
+    initReservedSlot(ScriptSlot, PrivateGCThingValue(script));
     initReservedSlot(StatusSlot, Int32Value(MODULE_STATUS_UNINSTANTIATED));
+    initReservedSlot(ScriptSourceObjectSlot, ObjectValue(*script->sourceObject()));
 }
 
 void
@@ -903,18 +964,22 @@ ModuleObject::fixEnvironmentsAfterCompartmentMerge()
     AssertModuleScopesMatch(this);
 }
 
-bool
-ModuleObject::hasScript() const
+JSScript*
+ModuleObject::maybeScript() const
 {
-    // When modules are parsed via the Reflect.parse() API, the module object
-    // doesn't have a script.
-    return !getReservedSlot(ScriptSlot).isUndefined();
+    Value value = getReservedSlot(ScriptSlot);
+    if (value.isUndefined())
+        return nullptr;
+
+    return value.toGCThing()->as<JSScript>();
 }
 
 JSScript*
 ModuleObject::script() const
 {
-    return static_cast<JSScript*>(getReservedSlot(ScriptSlot).toPrivate());
+    JSScript* ptr = maybeScript();
+    MOZ_RELEASE_ASSERT(ptr);
+    return ptr;
 }
 
 static inline void
@@ -945,16 +1010,23 @@ ModuleObject::evaluationError() const
     return getReservedSlot(EvaluationErrorSlot);
 }
 
-Value
-ModuleObject::hostDefinedField() const
+JSObject*
+ModuleObject::metaObject() const
 {
-    return getReservedSlot(HostDefinedSlot);
+    Value value = getReservedSlot(MetaObjectSlot);
+    if (value.isObject())
+        return &value.toObject();
+
+    MOZ_ASSERT(value.isUndefined());
+    return nullptr;
 }
 
 void
-ModuleObject::setHostDefinedField(const JS::Value& value)
+ModuleObject::setMetaObject(JSObject* obj)
 {
-    setReservedSlot(HostDefinedSlot, value);
+    MOZ_ASSERT(obj);
+    MOZ_ASSERT(!metaObject());
+    setReservedSlot(MetaObjectSlot, ObjectValue(*obj));
 }
 
 Scope*
@@ -967,11 +1039,6 @@ ModuleObject::enclosingScope() const
 ModuleObject::trace(JSTracer* trc, JSObject* obj)
 {
     ModuleObject& module = obj->as<ModuleObject>();
-    if (module.hasScript()) {
-        JSScript* script = module.script();
-        TraceManuallyBarrieredEdge(trc, &script, "Module script");
-        module.setReservedSlot(ScriptSlot, PrivateValue(script));
-    }
 
     if (module.hasImportBindings())
         module.importBindings().trace(trc);
@@ -1026,6 +1093,9 @@ ModuleObject::instantiateFunctionDeclarations(JSContext* cx, HandleModuleObject 
             }
         }
 
+        if (!obj)
+            return false;
+
         value = ObjectValue(*obj);
         if (!SetProperty(cx, env, funDecl.name->asPropertyName(), value))
             return false;
@@ -1046,6 +1116,14 @@ ModuleObject::execute(JSContext* cx, HandleModuleObject self, MutableHandleValue
 #endif
 
     RootedScript script(cx, self->script());
+
+    // The top-level script if a module is only ever executed once. Clear the
+    // reference at exit to prevent us keeping this alive unnecessarily. This is
+    // kept while executing so it is available to the debugger.
+    auto guardA = mozilla::MakeScopeExit([&] {
+        self->setReservedSlot(ScriptSlot, UndefinedValue());
+      });
+
     RootedModuleEnvironmentObject scope(cx, self->environment());
     if (!scope) {
         JS_ReportErrorASCII(cx, "Module declarations have not yet been instantiated");
@@ -1097,6 +1175,22 @@ ModuleObject::Instantiate(JSContext* cx, HandleModuleObject self)
 ModuleObject::Evaluate(JSContext* cx, HandleModuleObject self)
 {
     return InvokeSelfHostedMethod(cx, self, cx->names().ModuleEvaluate);
+}
+
+/* static */ ModuleNamespaceObject*
+ModuleObject::GetOrCreateModuleNamespace(JSContext* cx, HandleModuleObject self)
+{
+    FixedInvokeArgs<1> args(cx);
+    args[0].setObject(*self);
+
+    RootedValue result(cx);
+    if (!CallSelfHostedFunction(cx, cx->names().GetModuleNamespace, UndefinedHandleValue, args,
+                                &result))
+    {
+        return nullptr;
+    }
+
+    return &result.toObject().as<ModuleNamespaceObject>();
 }
 
 DEFINE_GETTER_FUNCTIONS(ModuleObject, namespace_, NamespaceSlot)
@@ -1160,9 +1254,9 @@ ModuleBuilder::ModuleBuilder(JSContext* cx, HandleModuleObject module,
     tokenStream_(tokenStream),
     requestedModuleSpecifiers_(cx, AtomSet(cx)),
     requestedModules_(cx, RequestedModuleVector(cx)),
-    importedBoundNames_(cx, AtomVector(cx)),
-    importEntries_(cx, ImportEntryVector(cx)),
+    importEntries_(cx, ImportEntryMap(cx)),
     exportEntries_(cx, ExportEntryVector(cx)),
+    exportNames_(cx, AtomSet(cx)),
     localExportEntries_(cx, ExportEntryVector(cx)),
     indirectExportEntries_(cx, ExportEntryVector(cx)),
     starExportEntries_(cx, ExportEntryVector(cx))
@@ -1171,7 +1265,9 @@ ModuleBuilder::ModuleBuilder(JSContext* cx, HandleModuleObject module,
 bool
 ModuleBuilder::init()
 {
-    return requestedModuleSpecifiers_.init();
+    return requestedModuleSpecifiers_.init() &&
+           importEntries_.init() &&
+           exportNames_.init();
 }
 
 bool
@@ -1268,20 +1364,24 @@ ModuleBuilder::processImport(frontend::ParseNode* pn)
         RootedAtom importName(cx_, spec->pn_left->pn_atom);
         RootedAtom localName(cx_, spec->pn_right->pn_atom);
 
-        if (!importedBoundNames_.append(localName))
-            return false;
-
         uint32_t line;
         uint32_t column;
         tokenStream_.lineAndColumnAt(spec->pn_left->pn_pos.begin, &line, &column);
 
         RootedImportEntryObject importEntry(cx_);
         importEntry = ImportEntryObject::create(cx_, module, importName, localName, line, column);
-        if (!importEntry || !importEntries_.append(importEntry))
+        if (!importEntry || !appendImportEntryObject(importEntry))
             return false;
     }
 
     return true;
+}
+
+bool
+ModuleBuilder::appendImportEntryObject(HandleImportEntryObject importEntry)
+{
+    MOZ_ASSERT(importEntry->localName());
+    return importEntries_.put(importEntry->localName(), importEntry);
 }
 
 bool
@@ -1326,14 +1426,25 @@ ModuleBuilder::processExport(frontend::ParseNode* pn)
       case ParseNodeKind::Const:
       case ParseNodeKind::Let: {
         MOZ_ASSERT(kid->isArity(PN_LIST));
-        for (ParseNode* var = kid->pn_head; var; var = var->pn_next) {
-            if (var->isKind(ParseNodeKind::Assign))
-                var = var->pn_left;
-            MOZ_ASSERT(var->isKind(ParseNodeKind::Name));
-            RootedAtom localName(cx_, var->pn_atom);
-            RootedAtom exportName(cx_, isDefault ? cx_->names().default_ : localName.get());
-            if (!appendExportEntry(exportName, localName))
-                return false;
+        for (ParseNode* binding = kid->pn_head; binding; binding = binding->pn_next) {
+            if (binding->isKind(ParseNodeKind::Assign))
+                binding = binding->pn_left;
+            else
+                MOZ_ASSERT(binding->isKind(ParseNodeKind::Name));
+
+            if (binding->isKind(ParseNodeKind::Name)) {
+                RootedAtom localName(cx_, binding->pn_atom);
+                RootedAtom exportName(cx_, isDefault ? cx_->names().default_ : localName.get());
+                if (!appendExportEntry(exportName, localName))
+                    return false;
+            } else if (binding->isKind(ParseNodeKind::Array)) {
+                if (!processExportArrayBinding(binding))
+                    return false;
+            } else {
+                MOZ_ASSERT(binding->isKind(ParseNodeKind::Object));
+                if (!processExportObjectBinding(binding))
+                    return false;
+            }
         }
         break;
       }
@@ -1351,6 +1462,75 @@ ModuleBuilder::processExport(frontend::ParseNode* pn)
 
       default:
         MOZ_CRASH("Unexpected parse node");
+    }
+
+    return true;
+}
+
+bool
+ModuleBuilder::processExportBinding(frontend::ParseNode* binding)
+{
+    if (binding->isKind(ParseNodeKind::Name)) {
+        RootedAtom name(cx_, binding->pn_atom);
+        return appendExportEntry(name, name);
+    }
+
+    if (binding->isKind(ParseNodeKind::Array))
+        return processExportArrayBinding(binding);
+
+    MOZ_ASSERT(binding->isKind(ParseNodeKind::Object));
+    return processExportObjectBinding(binding);
+}
+
+bool
+ModuleBuilder::processExportArrayBinding(frontend::ParseNode* pn)
+{
+    MOZ_ASSERT(pn->isKind(ParseNodeKind::Array));
+    MOZ_ASSERT(pn->isArity(PN_LIST));
+
+    for (ParseNode* node = pn->pn_head; node; node = node->pn_next) {
+        if (node->isKind(ParseNodeKind::Elision))
+            continue;
+
+        if (node->isKind(ParseNodeKind::Spread))
+            node = node->pn_kid;
+        else if (node->isKind(ParseNodeKind::Assign))
+            node = node->pn_left;
+
+        if (!processExportBinding(node))
+            return false;
+    }
+
+    return true;
+}
+
+bool
+ModuleBuilder::processExportObjectBinding(frontend::ParseNode* pn)
+{
+    MOZ_ASSERT(pn->isKind(ParseNodeKind::Object));
+    MOZ_ASSERT(pn->isArity(PN_LIST));
+
+    for (ParseNode* node = pn->pn_head; node; node = node->pn_next) {
+        MOZ_ASSERT(node->isKind(ParseNodeKind::MutateProto) ||
+                   node->isKind(ParseNodeKind::Colon) ||
+                   node->isKind(ParseNodeKind::Shorthand) ||
+                   node->isKind(ParseNodeKind::Spread));
+
+        ParseNode* target;
+        if (node->isKind(ParseNodeKind::Spread)) {
+            target = node->pn_kid;
+        } else {
+            if (node->isKind(ParseNodeKind::MutateProto))
+                target = node->pn_kid;
+            else
+                target = node->pn_right;
+
+            if (target->isKind(ParseNodeKind::Assign))
+                target = target->pn_left;
+        }
+
+        if (!processExportBinding(target))
+            return false;
     }
 
     return true;
@@ -1388,21 +1568,19 @@ ModuleBuilder::processExportFrom(frontend::ParseNode* pn)
 ImportEntryObject*
 ModuleBuilder::importEntryFor(JSAtom* localName) const
 {
-    for (auto import : importEntries_) {
-        if (import->localName() == localName)
-            return import;
-    }
-    return nullptr;
+    MOZ_ASSERT(localName);
+    auto ptr = importEntries_.lookup(localName);
+    if (!ptr)
+        return nullptr;
+
+    return ptr->value();
 }
 
 bool
 ModuleBuilder::hasExportedName(JSAtom* name) const
 {
-    for (auto entry : exportEntries_) {
-        if (entry->exportName() == name)
-            return true;
-    }
-    return false;
+    MOZ_ASSERT(name);
+    return exportNames_.has(name);
 }
 
 bool
@@ -1416,7 +1594,7 @@ ModuleBuilder::appendExportEntry(HandleAtom exportName, HandleAtom localName, Pa
     Rooted<ExportEntryObject*> exportEntry(cx_);
     exportEntry = ExportEntryObject::create(cx_, exportName, nullptr, nullptr, localName,
                                             line, column);
-    return exportEntry && exportEntries_.append(exportEntry);
+    return exportEntry && appendExportEntryObject(exportEntry);
 }
 
 bool
@@ -1430,7 +1608,17 @@ ModuleBuilder::appendExportFromEntry(HandleAtom exportName, HandleAtom moduleReq
     Rooted<ExportEntryObject*> exportEntry(cx_);
     exportEntry = ExportEntryObject::create(cx_, exportName, moduleRequest, importName, nullptr,
                                             line, column);
-    return exportEntry && exportEntries_.append(exportEntry);
+    return exportEntry && appendExportEntryObject(exportEntry);
+}
+
+bool
+ModuleBuilder::appendExportEntryObject(HandleExportEntryObject exportEntry)
+{
+    if (!exportEntries_.append(exportEntry))
+        return false;
+
+    JSAtom* exportName = exportEntry->exportName();
+    return !exportName || exportNames_.put(exportName);
 }
 
 bool
@@ -1466,4 +1654,164 @@ ArrayObject* ModuleBuilder::createArray(const JS::Rooted<GCVector<T>>& vector)
         array->initDenseElement(i, ObjectValue(*vector[i]));
 
     return array;
+}
+
+template <typename K, typename V>
+ArrayObject* ModuleBuilder::createArray(const JS::Rooted<GCHashMap<K, V>>& map)
+{
+    uint32_t length = map.count();
+    RootedArrayObject array(cx_, NewDenseFullyAllocatedArray(cx_, length));
+    if (!array)
+        return nullptr;
+
+    array->setDenseInitializedLength(length);
+
+    uint32_t i = 0;
+    for (auto r = map.all(); !r.empty(); r.popFront())
+        array->initDenseElement(i++, ObjectValue(*r.front().value()));
+
+    return array;
+}
+
+JSObject*
+js::GetOrCreateModuleMetaObject(JSContext* cx, HandleObject moduleArg)
+{
+    HandleModuleObject module = moduleArg.as<ModuleObject>();
+    if (JSObject* obj = module->metaObject())
+        return obj;
+
+    RootedObject metaObject(cx, NewObjectWithGivenProto<PlainObject>(cx, nullptr));
+    if (!metaObject)
+        return nullptr;
+
+    JS::ModuleMetadataHook func = cx->runtime()->moduleMetadataHook;
+    if (!func) {
+        JS_ReportErrorASCII(cx, "Module metadata hook not set");
+        return nullptr;
+    }
+
+    RootedValue modulePrivate(cx, JS::GetModulePrivate(module));
+    if (!func(cx, modulePrivate, metaObject)) {
+        return nullptr;
+    }
+
+    module->setMetaObject(metaObject);
+
+    return metaObject;
+}
+
+JSObject*
+js::CallModuleResolveHook(JSContext* cx, HandleValue referencingPrivate, HandleString specifier)
+{
+    JS::ModuleResolveHook moduleResolveHook = cx->runtime()->moduleResolveHook;
+    if (!moduleResolveHook) {
+        JS_ReportErrorASCII(cx, "Module resolve hook not set");
+        return nullptr;
+    }
+
+    RootedObject result(cx, moduleResolveHook(cx, referencingPrivate, specifier));
+    if (!result) {
+        return nullptr;
+    }
+
+    if (!result->is<ModuleObject>()) {
+        JS_ReportErrorASCII(cx, "Module resolve hook did not return Module object");
+        return nullptr;
+    }
+
+    return result;
+}
+
+JSObject*
+js::StartDynamicModuleImport(JSContext* cx,
+                             HandleObject referencingScriptSource,
+                             HandleValue specifierArg)
+{
+    RootedObject promiseConstructor(cx, JS::GetPromiseConstructor(cx));
+    if (!promiseConstructor) {
+        return nullptr;
+    }
+
+    RootedObject promiseObject(cx, JS::NewPromiseObject(cx, nullptr));
+    if (!promiseObject) {
+        return nullptr;
+    }
+
+    Handle<PromiseObject*> promise = promiseObject.as<PromiseObject>();
+
+    JS::ModuleDynamicImportHook importHook = cx->runtime()->moduleDynamicImportHook;
+    if (!importHook) {
+        // Dynamic import can be disabled by a pref and is not supported in all
+        // contexts (e.g. web workers).
+        JS_ReportErrorASCII(
+            cx,
+            "Dynamic module import is disabled or not supported in this context");
+        if (!RejectPromiseWithPendingError(cx, promise)) {
+            return nullptr;
+        }
+        return promise;
+    }
+
+    RootedString specifier(cx, ToString(cx, specifierArg));
+    if (!specifier) {
+        if (!RejectPromiseWithPendingError(cx, promise)) {
+            return nullptr;
+        }
+        return promise;
+    }
+
+    RootedValue referencingPrivate(cx);
+    if (referencingScriptSource) {
+        ScriptSourceObject* sso =
+            &UncheckedUnwrap(referencingScriptSource)->as<ScriptSourceObject>();
+        referencingPrivate = sso->canonicalPrivate();
+    }
+    cx->runtime()->addRefScriptPrivate(referencingPrivate);
+
+    if (!importHook(cx, referencingPrivate, specifier, promise)) {
+        cx->runtime()->releaseScriptPrivate(referencingPrivate);
+
+        // If there's no exception pending then the script is terminating
+        // anyway, so just return nullptr.
+        if (!cx->isExceptionPending() || !RejectPromiseWithPendingError(cx, promise)) {
+            return nullptr;
+        }
+        return promise;
+    }
+
+    return promise;
+}
+
+bool
+js::FinishDynamicModuleImport(JSContext* cx, HandleValue referencingPrivate, HandleString specifier,
+                              HandleObject promiseArg)
+{
+    Handle<PromiseObject*> promise = promiseArg.as<PromiseObject>();
+
+    auto releasePrivate = mozilla::MakeScopeExit([&] {
+        cx->runtime()->releaseScriptPrivate(referencingPrivate);
+    });
+
+    if (cx->isExceptionPending()) {
+        return RejectPromiseWithPendingError(cx, promise);
+    }
+
+    RootedObject result(cx, CallModuleResolveHook(cx, referencingPrivate, specifier));
+    if (!result) {
+        return RejectPromiseWithPendingError(cx, promise);
+    }
+
+    RootedModuleObject module(cx, &result->as<ModuleObject>());
+    if (module->status() != MODULE_STATUS_EVALUATED) {
+        JS_ReportErrorASCII(cx, "Unevaluated or errored module returned by module resolve hook");
+        return RejectPromiseWithPendingError(cx, promise);
+    }
+
+    RootedObject ns(cx, ModuleObject::GetOrCreateModuleNamespace(cx, module));
+    if (!ns) {
+        return RejectPromiseWithPendingError(cx, promise);
+    }
+
+    RootedValue value(cx, ObjectValue(*ns));
+    return PromiseObject::resolve(cx, promise, value);
 }
