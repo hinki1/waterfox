@@ -487,6 +487,11 @@ nsresult nsCocoaWindow::CreateNativeWindow(const NSRect &aRect,
   mWindow = [[windowClass alloc] initWithContentRect:contentRect styleMask:features 
                                  backing:NSBackingStoreBuffered defer:YES];
 
+  // Make sure that window titles don't leak to disk in private browsing mode
+  // due to macOS' resume feature.
+  [mWindow setRestorable:NO];
+  [mWindow disableSnapshotRestoration];
+
   // setup our notification delegate. Note that setDelegate: does NOT retain.
   mDelegate = [[WindowDelegate alloc] initWithGeckoWindow:this];
   [mWindow setDelegate:mDelegate];
@@ -2911,6 +2916,9 @@ nsCocoaWindow::GetEditCommands(NativeKeyBindingsType aType,
 
 - (BOOL)FrameView__wantsFloatingTitlebar
 {
+  if(nsCocoaFeatures::OnBigSurOrLater()) {
+    return [super FrameView__wantsFloatingTitlebar];
+  }
   return NO;
 }
 
@@ -3037,7 +3045,7 @@ static NSMutableSet *gSwizzledFrameViewClasses = nil;
     IMP _wantsFloatingTitlebar =
       class_getMethodImplementation(frameViewClass,
                                     @selector(_wantsFloatingTitlebar));
-    if (_wantsFloatingTitlebar &&
+    if (!nsCocoaFeatures::OnBigSurOrLater() && _wantsFloatingTitlebar &&
         _wantsFloatingTitlebar != our_wantsFloatingTitlebar) {
       nsToolkit::SwizzleMethods(frameViewClass, @selector(_wantsFloatingTitlebar),
                                 @selector(FrameView__wantsFloatingTitlebar));
@@ -3052,6 +3060,10 @@ static NSMutableSet *gSwizzledFrameViewClasses = nil;
 {
   mDrawsIntoWindowFrame = NO;
   [super initWithContentRect:aContentRect styleMask:aStyle backing:aBufferingType defer:aFlag];
+  // MacOS 13 Ventura, doesn't seem to create the contentView... so create it ourselves
+  if(![super contentView]) {
+      [super setContentView:[[[NSView alloc] initWithFrame:aContentRect] autorelease]];
+  }
   mState = nil;
   mActiveTitlebarColor = nil;
   mInactiveTitlebarColor = nil;
@@ -3307,68 +3319,6 @@ static const NSString* kStateCollectionBehavior = @"collectionBehavior";
   }
 }
 
-// Override methods that translate between content rect and frame rect.
-- (NSRect)contentRectForFrameRect:(NSRect)aRect
-{
-  if ([self drawsContentsIntoWindowFrame]) {
-    return aRect;
-  }
-  return [super contentRectForFrameRect:aRect];
-}
-
-- (NSRect)contentRectForFrameRect:(NSRect)aRect styleMask:(NSUInteger)aMask
-{
-  if ([self drawsContentsIntoWindowFrame]) {
-    return aRect;
-  }
-  // Call the instance method on super, if it exists (it's undocumented so we
-  // shouldn't rely on it), or fall back to the (documented) class method.
-  if ([NSWindow instancesRespondToSelector:@selector(contentRectForFrameRect:styleMask:)]) {
-    return [super contentRectForFrameRect:aRect styleMask:aMask];
-  } else {
-    return [NSWindow contentRectForFrameRect:aRect styleMask:aMask];
-  }
-}
-
-- (NSRect)frameRectForContentRect:(NSRect)aRect
-{
-  if ([self drawsContentsIntoWindowFrame]) {
-    return aRect;
-  }
-  return [super frameRectForContentRect:aRect];
-}
-
-- (NSRect)frameRectForContentRect:(NSRect)aRect styleMask:(NSUInteger)aMask
-{
-  if ([self drawsContentsIntoWindowFrame]) {
-    return aRect;
-  }
-  // Call the instance method on super, if it exists (it's undocumented so we
-  // shouldn't rely on it), or fall back to the (documented) class method.
-  if ([NSWindow instancesRespondToSelector:@selector(frameRectForContentRect:styleMask:)]) {
-    return [super frameRectForContentRect:aRect styleMask:aMask];
-  } else {
-    return [NSWindow frameRectForContentRect:aRect styleMask:aMask];
-  }
-}
-
-- (void)setContentView:(NSView*)aView
-{
-  [super setContentView:aView];
-
-  // Now move the contentView to the bottommost layer so that it's guaranteed
-  // to be under the window buttons.
-  NSView* frameView = [aView superview];
-  [aView removeFromSuperview];
-  if ([frameView respondsToSelector:@selector(_addKnownSubview:positioned:relativeTo:)]) {
-    // 10.10 prints a warning when we call addSubview on the frame view, so we
-    // silence the warning by calling a private method instead.
-    [frameView _addKnownSubview:aView positioned:NSWindowBelow relativeTo:nil];
-  } else {
-    [frameView addSubview:aView positioned:NSWindowBelow relativeTo:nil];
-  }
-}
-
 - (NSArray*)titlebarControls
 {
   // Return all subviews of the frameView which are not the content view.
@@ -3600,6 +3550,68 @@ static const NSString* kStateCollectionBehavior = @"collectionBehavior";
   NSRect frameRect = [self frame];
   NSRect originalContentRect = [NSWindow contentRectForFrameRect:frameRect styleMask:[self styleMask]];
   return NSMaxY(frameRect) - NSMaxY(originalContentRect);
+}
+
+// Override methods that translate between content rect and frame rect.
+- (NSRect)contentRectForFrameRect:(NSRect)aRect
+{
+  if ([self drawsContentsIntoWindowFrame]) {
+    return aRect;
+  }
+  return [super contentRectForFrameRect:aRect];
+}
+
+- (NSRect)contentRectForFrameRect:(NSRect)aRect styleMask:(NSUInteger)aMask
+{
+  if ([self drawsContentsIntoWindowFrame]) {
+    return aRect;
+  }
+  // Call the instance method on super, if it exists (it's undocumented so we
+  // shouldn't rely on it), or fall back to the (documented) class method.
+  if ([NSWindow instancesRespondToSelector:@selector(contentRectForFrameRect:styleMask:)]) {
+    return [super contentRectForFrameRect:aRect styleMask:aMask];
+  } else {
+    return [NSWindow contentRectForFrameRect:aRect styleMask:aMask];
+  }
+}
+
+- (NSRect)frameRectForContentRect:(NSRect)aRect
+{
+  if ([self drawsContentsIntoWindowFrame]) {
+    return aRect;
+  }
+  return [super frameRectForContentRect:aRect];
+}
+
+- (NSRect)frameRectForContentRect:(NSRect)aRect styleMask:(NSUInteger)aMask
+{
+  if ([self drawsContentsIntoWindowFrame]) {
+    return aRect;
+  }
+  // Call the instance method on super, if it exists (it's undocumented so we
+  // shouldn't rely on it), or fall back to the (documented) class method.
+  if ([NSWindow instancesRespondToSelector:@selector(frameRectForContentRect:styleMask:)]) {
+    return [super frameRectForContentRect:aRect styleMask:aMask];
+  } else {
+    return [NSWindow frameRectForContentRect:aRect styleMask:aMask];
+  }
+}
+
+- (void)setContentView:(NSView*)aView
+{
+  [super setContentView:aView];
+
+  // Now move the contentView to the bottommost layer so that it's guaranteed
+  // to be under the window buttons.
+  NSView* frameView = [aView superview];
+  [aView removeFromSuperview];
+  if ([frameView respondsToSelector:@selector(_addKnownSubview:positioned:relativeTo:)]) {
+    // 10.10 prints a warning when we call addSubview on the frame view, so we
+    // silence the warning by calling a private method instead.
+    [frameView _addKnownSubview:aView positioned:NSWindowBelow relativeTo:nil];
+  } else {
+    [frameView addSubview:aView positioned:NSWindowBelow relativeTo:nil];
+  }
 }
 
 // Stores the complete height of titlebar + toolbar.
