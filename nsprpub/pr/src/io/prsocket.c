@@ -307,7 +307,7 @@ static PRStatus PR_CALLBACK SocketConnectContinue(
 #if defined(_WIN64)
             if (fd->secret->overlappedActive) {
                 PRInt32 rvSent;
-                if (GetOverlappedResult(osfd, &fd->secret->ol, &rvSent, FALSE) == FALSE) {
+                if (GetOverlappedResult((HANDLE)osfd, &fd->secret->ol, &rvSent, FALSE) == FALSE) {
                     err = WSAGetLastError();
                     PR_LOG(_pr_io_lm, PR_LOG_MIN,
                            ("SocketConnectContinue GetOverlappedResult failed %d\n", err));
@@ -339,7 +339,7 @@ static PRStatus PR_CALLBACK SocketConnectContinue(
     if (fd->secret->overlappedActive) {
         PR_ASSERT(fd->secret->nonblocking);
         PRInt32 rvSent;
-        if (GetOverlappedResult(osfd, &fd->secret->ol, &rvSent, FALSE) == TRUE) {
+        if (GetOverlappedResult((HANDLE)osfd, &fd->secret->ol, &rvSent, FALSE) == TRUE) {
             fd->secret->overlappedActive = PR_FALSE;
             PR_LOG(_pr_io_lm, PR_LOG_MIN,
                ("SocketConnectContinue GetOverlappedResult succeeded\n"));
@@ -1236,7 +1236,7 @@ static PRInt16 PR_CALLBACK SocketPoll(
 #if defined(_WIN64)
     if (in_flags & PR_POLL_WRITE) {
         if (fd->secret->alreadyConnected) {
-            out_flags = PR_POLL_WRITE;
+            *out_flags = PR_POLL_WRITE;
             return PR_POLL_WRITE;
         }
     }
@@ -1283,7 +1283,7 @@ static PRIOMethods tcpMethods = {
     SocketConnectContinue,
     (PRReservedFN)_PR_InvalidInt, 
     (PRReservedFN)_PR_InvalidInt, 
-    (PRReservedFN)_PR_InvalidInt, 
+    (PRReservedFN)_PR_InvalidInt,
     (PRReservedFN)_PR_InvalidInt
 };
 
