@@ -8,7 +8,7 @@ Build-Depends:
  autoconf2.13,
 # ohne python 2.7 geht es nicht
  python3, python,
- cargo,
+ cargo (>= 0.57.0) | cargo-mozilla (>= 0.57.0),
  rustc (>= 1.56.0) | rustc-mozilla (>= 1.56.0),
  libstd-rust-dev | libstd-rust-mozilla-dev,
  pkg-config,
