@@ -1,3 +1,9 @@
+waterfox (2022.11) bullseye; urgency=medium
+
+  * new upstream version 2022.11-classig
+
+ -- Matthias Hinkfoth <hinki@abwesend.de>  Sat, 19 Nov 2022 17:39:42 +0100
+
 waterfox (2022.08) bullseye; urgency=medium
 
   * new upstream version 2022.08-classic
